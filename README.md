@@ -25,6 +25,21 @@ Status: `PRE-ALPHA`
 - require review for ambiguity or conflict
 - never mix revisions
 
+## Architecture
+
+```text
+source package
+→ project and revision context
+→ document and sheet registry
+→ extraction
+→ object graph
+→ measurement plan
+→ quantity engine
+→ validation
+→ review
+→ exports
+```
+
 ## Structure
 
 ```text
@@ -35,10 +50,21 @@ docs/
 tests/
 ```
 
-## Test
+## Quick start
 
 ```bash
+python -m pip install -e .
 python -m unittest discover -s tests -v
 ```
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Aufmass Method](docs/AUFMASS_METHOD.md)
+- [Data Model](docs/DATA_MODEL.md)
+- [Validation](docs/VALIDATION.md)
+- [Roadmap](docs/ROADMAP.md)
+
+Only public-safe code, schemas and synthetic fixtures belong in this repository. Real project files and outputs remain outside it.
 
 No open-source license has been selected yet.
