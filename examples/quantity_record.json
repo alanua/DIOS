@@ -1,0 +1,26 @@
+{
+  "item_id": "ARCH-ROOM-001",
+  "discipline": "Architectural",
+  "system": "Rooms",
+  "location": "Synthetic Level 01 / Room 1.01",
+  "description": "Synthetic room floor area",
+  "unit": "m2",
+  "source_value": 12.5,
+  "normalized_si_value": 12.5,
+  "normalized_si_unit": "m2",
+  "formula": "AREA(closed_room_polygon)",
+  "measurement_method": "CLOSED_POLYGON_AREA",
+  "data_class": "CALCULATED",
+  "confidence": 0.95,
+  "verification_status": "NEEDS_REVIEW",
+  "source": {
+    "document_id": "synthetic-plan",
+    "revision": "A",
+    "sheet": "A-101",
+    "page": 1,
+    "evidence_reference": "zone:B2"
+  },
+  "assumptions": [],
+  "conflicts": [],
+  "notes": "Synthetic public fixture"
+}
