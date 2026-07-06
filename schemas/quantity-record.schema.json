@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DIOS Quantity Record",
+  "type": "object",
+  "required": ["item_id", "description", "unit", "data_class", "verification_status", "source"],
+  "properties": {
+    "item_id": {"type": "string"},
+    "discipline": {"type": ["string", "null"]},
+    "system": {"type": ["string", "null"]},
+    "location": {"type": ["string", "null"]},
+    "description": {"type": "string"},
+    "unit": {"type": "string"},
+    "source_value": {"type": ["number", "string", "null"]},
+    "normalized_si_value": {"type": ["number", "null"]},
+    "normalized_si_unit": {"type": ["string", "null"]},
+    "formula": {"type": ["string", "null"]},
+    "measurement_method": {"type": ["string", "null"]},
+    "data_class": {"enum": ["EXPLICIT", "CALCULATED", "INFERRED", "UNKNOWN"]},
+    "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "verification_status": {"enum": ["VERIFIED", "NEEDS_REVIEW", "CONFLICT", "NOT_FOUND"]},
+    "source": {
+      "type": "object",
+      "required": ["document_id"],
+      "properties": {
+        "document_id": {"type": "string"},
+        "revision": {"type": ["string", "null"]},
+        "sheet": {"type": ["string", "null"]},
+        "page": {"type": ["integer", "null"]},
+        "evidence_reference": {"type": ["string", "null"]}
+      }
+    },
+    "assumptions": {"type": "array", "items": {"type": "string"}},
+    "conflicts": {"type": "array", "items": {"type": "string"}},
+    "notes": {"type": ["string", "null"]}
+  }
+}
