@@ -1,8 +1,10 @@
 # DIOS Canonical Memory-Gate Packet
 
-Status: `APPROVED_DECISION_PACKET / PUBLIC_SAFE / PENDING_MEMORY_GATE_WRITE`
+Status: `DECISION_PACKET_CANDIDATE / PUBLIC_SAFE / PENDING_REVIEW / NO_MEMORY_WRITE`
 
 Purpose: provide one deterministic, operator-reviewable packet for canonical DIOS architecture decisions. This packet is a GitHub control artifact and must be written to canonical private memory only through the Skeleton Memory Gateway with validation, dedupe, provenance, approval and append-only audit.
+
+This packet is not itself a Memory Gateway write. It must not be ingested until the corrected PR head is reviewed and explicitly approved.
 
 ## Memory write identity
 
@@ -13,11 +15,12 @@ bundle_id: dios.architecture.core_revision_visualization.v1
 dedupe_key: dios:architecture:core-revision-visualization:v1
 idempotency_key: dios:architecture:core-revision-visualization:v1:2026-07-08
 classification: PUBLIC_SAFE
-approval_source: operator_explicit
-canonical_write_status: PENDING_MEMORY_GATE_WRITE
+approval_source: operator_explicit_after_exact_head_review
+canonical_write_status: PENDING_REVIEW_NO_MEMORY_WRITE
 source_repository: alanua/DIOS
 source_branch: design/sketchup-bridge-architecture
 source_pull_request: 3
+required_source_head_sha: TO_BE_FILLED_AFTER_CORRECTED_HEAD_REVIEW
 ```
 
 ## Canonical decisions
@@ -56,25 +59,31 @@ Visualization may not silently change canonical geometry, room topology, opening
 
 ### DIOS-ARCH-003 — Revision is the project-state boundary
 
-A drawing/model revision is an immutable boundary between project states.
+A drawing/model revision is an immutable source boundary that contributes to a candidate project state.
 
 ```text
 Revision
-→ normalized project-state snapshot
-→ classified change set from the previous snapshot
-→ validation and approval
-→ project stage
+→ candidate RevisionSet
+→ candidate project-state snapshot
+→ classified change set from the previous approved snapshot
+→ validation and human approval
+→ approved snapshot
+→ optional explicit project-stage transition
 ```
 
 A new revision never silently overwrites the previous canonical state. Historical revisions and snapshots remain immutable.
 
+A new revision does not automatically create or promote a `ProjectStage`. Stage creation, baseline assignment and transition require an explicit human-approved decision.
+
 ### DIOS-ARCH-004 — Explicit revision sets
 
-A project stage is based on an explicit `RevisionSet` containing compatible revisions from relevant disciplines.
+A project state is based on an explicit `RevisionSet` containing compatible revisions from relevant disciplines.
 
 The newest file from each discipline is not assumed compatible. Architecture, structure and MEP revisions require explicit compatibility review.
 
 Revision conflicts block final downstream quantities and final visualization until resolved or explicitly accepted.
+
+`RevisionSet.stage_id` may be nullable while compatibility is being evaluated. `ProjectStage.baseline_revision_set_id` may be nullable while the stage is a draft. This avoids a bootstrap cycle between revision-set creation and stage creation.
 
 ### DIOS-ARCH-005 — Project-state entities
 
@@ -88,6 +97,15 @@ The minimum revision/state model contains:
 - `RevisionChangeSet`;
 - stable project objects and continuity relations;
 - dependent artifacts with stale-state metadata.
+
+Every downstream technical artifact carries the full canonical context tuple:
+
+- `project_id`;
+- `stage_id`;
+- `revision_set_id`;
+- `snapshot_id`.
+
+`scene_state_revision` is local working-representation state only and must not replace the canonical context tuple.
 
 ### DIOS-ARCH-006 — Stable object continuity
 
@@ -135,7 +153,7 @@ Each row records at minimum:
 - source evidence;
 - data class and confidence;
 - verification and approval status;
-- quantity, visualization and coordination impact.
+- quantity, visualization and coordination impact as downstream impact dimensions.
 
 Initial semantic change classes include:
 
@@ -153,10 +171,12 @@ Initial semantic change classes include:
 - `LEVEL_CHANGED`;
 - `SYSTEM_RELATION_CHANGED`;
 - `ANNOTATION_CHANGED`;
-- `QUANTITY_IMPACT`;
-- `VISUALIZATION_ONLY_CHANGE`;
+- `QUANTITY_RULE_CHANGED`;
+- `DERIVED_REPRESENTATION_CHANGED`;
 - `COORDINATION_CONFLICT`;
 - `UNKNOWN_CHANGE`.
+
+`quantity_impact`, `visualization_impact` and `coordination_impact` are not semantic source/change classes. Presentation-only or visualization-only outputs remain non-authoritative derived artifacts.
 
 ### DIOS-ARCH-009 — Stale propagation
 
@@ -211,7 +231,9 @@ DIOS must reject incompatible revision mixing rather than produce an apparently 
 
 SketchUp is an editable working representation, not canonical truth and not revision authority.
 
-The DIOS SketchUp integration consumes an approved snapshot and verifies project, stage, revision set and snapshot before mutation. Manual SketchUp changes return as `PROPOSED` changes and require DIOS validation and human approval.
+The DIOS SketchUp integration consumes an approved snapshot and verifies `project_id`, `stage_id`, `revision_set_id` and `snapshot_id` before mutation. Manual SketchUp changes return as `PROPOSED` changes and require DIOS validation and human approval.
+
+`scene_state_revision` is used only to detect local working-model drift. It is not a substitute for source revision, revision set or snapshot identity.
 
 ### DIOS-ARCH-013 — Registers and exports
 
@@ -240,6 +262,14 @@ Coordination checks relations and conflicts between approved source facts.
 All modules report results against the same project, stage, revision-set and snapshot context.
 ```
 
+### DIOS-ARCH-015 — Execution security and dry-run boundary
+
+Commands from the controller to a workstation agent must carry authorization and signature provenance: signer identity, key identity, command identity, issued-at and expiry timestamps, nonce or monotonic sequence, expected source hash/revision, approval reference where required and audit reference.
+
+Agent-to-bridge delivery over loopback is not authentication by itself. The local session must be explicitly authenticated, short-lived, replay-protected and rotatable. Rejected, expired, replayed or unauthenticated commands must produce structured audit records without mutating the model.
+
+`dry_run: true` is explicitly non-mutating. It may return planned affected object IDs, resolved assets, precondition findings, expected diff, warnings and approval requirements, but it must not persist a model change, scene-state change or canonical state change.
+
 ## Supersession and conflict rules
 
 - This bundle supersedes no previously approved DIOS canonical memory record unless an explicit reconciliation identifies one.
@@ -263,4 +293,4 @@ A successful canonical write must return or record:
 - write timestamp;
 - verification status.
 
-Until that receipt exists, status remains `PENDING_MEMORY_GATE_WRITE` even though the GitHub packet is durable.
+Until that receipt exists, status remains `PENDING_REVIEW_NO_MEMORY_WRITE` even though the GitHub packet is durable.
