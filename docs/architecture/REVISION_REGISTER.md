@@ -78,6 +78,8 @@ Required fields:
 - `verification_status`
 - `approval_status`
 
+The full canonical context tuple is `project_id`, `stage_id`, `revision_set_id` and `snapshot_id`. Change rows carry the tuple through `project_id`, from/to revision sets and from/to snapshots; `stage_id` may be nullable while a candidate change set has not yet been attached to an approved project stage.
+
 ## 3. Meaning of the date fields
 
 The register distinguishes:
@@ -85,7 +87,7 @@ The register distinguishes:
 - `revision_date`: date declared by the issuer in the drawing/model revision;
 - `received_at`: when the file entered DIOS;
 - `analyzed_at`: when DIOS completed extraction/comparison;
-- `approved_at`: when a human approved the revision set or project stage;
+- `approved_at`: when a human approved the revision set, snapshot or project stage;
 - `change_date`: normally the authoritative revision date that introduced the change.
 
 If the revision date is missing or conflicting, `change_date` remains unknown until resolved. DIOS must not substitute the upload date silently.
@@ -127,8 +129,10 @@ Examples:
 - lighting type L-07 replaced by L-12;
 - stair flight geometry changed;
 - room number changed while physical room identity remained stable;
+- quantity rule changed from net to gross area basis;
 - sheet annotation changed without geometry impact;
-- new architectural revision conflicts with the current structural baseline.
+- new architectural revision conflicts with the current structural baseline;
+- derived visualization scene changed without source-geometry authority.
 
 ## 6. Evidence classes
 
@@ -139,8 +143,8 @@ Allowed evidence classes:
 - `EXPLICIT_REVISION_NOTE`
 - `EXPLICIT_REVISION_CLOUD`
 - `EXPLICIT_DELTA_SYMBOL`
-- `DEMONSTRATED_GEOMETRY_DIFF`
-- `DEMONSTRATED_PROPERTY_DIFF`
+- `DETECTED_GEOMETRY_DIFF`
+- `DETECTED_PROPERTY_DIFF`
 - `INFERRED_OBJECT_MATCH`
 - `MARKETING_OR_PRESENTATION_ONLY`
 - `CONFLICT`
@@ -148,9 +152,11 @@ Allowed evidence classes:
 
 A revision note is not sufficient evidence that all listed changes are complete. DIOS compares the actual project-state snapshots independently.
 
+Demonstrations, screenshots, marketing outputs and presentation renders may inspire tests or review prompts, but they are not verified technical evidence unless backed by source revisions, deterministic comparison, provenance and review.
+
 ## 7. Change classification
 
-Initial change classes:
+Initial semantic change classes:
 
 - `OBJECT_ADDED`
 - `OBJECT_REMOVED`
@@ -166,10 +172,12 @@ Initial change classes:
 - `LEVEL_CHANGED`
 - `SYSTEM_RELATION_CHANGED`
 - `ANNOTATION_CHANGED`
-- `QUANTITY_IMPACT`
-- `VISUALIZATION_ONLY_CHANGE`
+- `QUANTITY_RULE_CHANGED`
+- `DERIVED_REPRESENTATION_CHANGED`
 - `COORDINATION_CONFLICT`
 - `UNKNOWN_CHANGE`
+
+`quantity_impact`, `visualization_impact` and `coordination_impact` are downstream impact dimensions. They are not semantic source/change classes. A visualization-only edit must be treated as a derived-representation change and must not promote a presentation artifact to geometry, quantity or revision authority.
 
 ## 8. Impact flags
 
@@ -213,14 +221,17 @@ Possible values:
 new revision received
 → source revision row created
 → candidate revision set formed
-→ new snapshot generated
+→ candidate snapshot generated
 → previous/current snapshots compared
 → detailed change rows created
 → revision summary calculated
 → dependent artifacts marked stale
 → human review
 → register rows approved or corrected
+→ optional explicit project-stage transition decision
 ```
+
+A new source revision does not automatically create or promote a new project stage. Stage creation and transition require a separate human-approved decision.
 
 ## 10. Historical integrity
 
@@ -258,13 +269,15 @@ Excel and PDF are review/export artifacts, not canonical storage.
 | A-08 | 2026-04-18 | A-101 | W-104 | `OBJECT_MOVED` | X=4250 | X=4370 | quantity possible | verified |
 | A-08 | 2026-04-18 | A-101 | D-023 | `PROPERTY_CHANGED` | 900 mm | 1000 mm | quantity confirmed | verified |
 | A-08 | 2026-04-18 | A-203 | O-017 | `OPENING_ADDED` | absent | present | cross-discipline | needs review |
+| A-08 | 2026-04-18 | QTO | AREA-RULE | `QUANTITY_RULE_CHANGED` | net area | gross area | recalculation required | needs review |
 
 ## 13. Architectural rule
 
 ```text
 Revision register answers: when did the boundary change?
 Change register answers: what changed across that boundary?
+Impact flags answer: what downstream work may be affected?
 Object history answers: how did one physical object evolve through the project?
 ```
 
-The DIOS core produces these registers. Visualization, Aufmass, coordination and export modules consume them and attach their outputs to the same revision, stage and snapshot context.
+The DIOS core produces these registers. Visualization, Aufmass, coordination and export modules consume them and attach their outputs to the same project, stage, revision-set and snapshot context.
