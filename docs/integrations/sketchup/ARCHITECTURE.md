@@ -21,7 +21,7 @@ Enable DIOS to inspect and update a SketchUp scene through structured, reviewabl
 The target workflow is:
 
 ```text
-validated DIOS scene state
+validated DIOS project-state snapshot
 → approved scene operation
 → remote workstation delivery
 → SketchUp main-thread execution
@@ -74,12 +74,13 @@ Responsibilities:
 
 - Tailscale-facing transport;
 - controller pairing and session authentication;
+- command signature and replay validation;
 - command inbox/outbox;
 - durable local queue;
 - reconnect after roaming, sleep or network change;
 - process and session health;
 - local asset cache and restricted file transfer;
-- localhost API for the SketchUp extension;
+- authenticated localhost API for the SketchUp extension;
 - structured logs without private drawing contents;
 - optional later support for starting SketchUp and opening an approved model.
 
@@ -93,8 +94,9 @@ Responsibilities:
 
 - compact `UI::HtmlDialog` panel;
 - registration of the open model;
-- polling the local agent over loopback only;
+- polling the local agent over authenticated loopback only;
 - validation of command context and schema version;
+- validation of local session token, nonce/sequence and expiry;
 - queuing commands for SketchUp main-thread execution;
 - stable DIOS entity/component attributes;
 - idempotent component insertion and updates;
@@ -139,7 +141,7 @@ Authority rules:
 3. SketchUp is authoritative only for the current local working representation.
 4. Manual SketchUp edits are proposals until approved by DIOS.
 5. Presentation outputs are never measurement or revision authority.
-6. The connector must reject revision mismatch rather than applying commands to the wrong state.
+6. The connector must reject revision/context mismatch rather than applying commands to the wrong state.
 
 ## 5. Module decomposition
 
@@ -268,14 +270,16 @@ Pairing must be explicit. Discovery of a peer on the tailnet is not sufficient a
 
 ```text
 Controller
-→ authenticated command endpoint
+→ authenticated and signed command endpoint
 → Workstation Agent durable inbox
-→ localhost bridge queue
+→ authenticated localhost bridge queue
 → SketchUp UI/main thread
 → local result
 → Agent durable outbox
 → Controller
 ```
+
+Loopback alone is not authentication. The agent and bridge must establish an authenticated local session before any command is delivered to SketchUp.
 
 ### 6.3 Offline behaviour
 
@@ -306,19 +310,28 @@ A command contains:
 - `command_id`;
 - `correlation_id`;
 - `project_id`;
+- `stage_id`;
+- `revision_set_id`;
+- `snapshot_id`;
 - `model_id`;
-- `expected_revision`;
+- `expected_source_hash` or `expected_source_revision`;
+- `scene_state_revision` when targeting a known local working state;
 - `command_type`;
 - `created_at` and `expires_at`;
 - `dry_run`;
 - `payload`;
 - `preconditions`;
 - `requested_by`;
-- `approval_reference` where required.
+- `approval_reference` where required;
+- `authorization` with signer/key identity, signature reference, nonce or sequence number and session identifier.
 
 A result contains:
 
 - command identity;
+- `project_id`;
+- `stage_id`;
+- `revision_set_id`;
+- `snapshot_id`;
 - final status;
 - timestamps;
 - SketchUp version and model context;
@@ -327,7 +340,25 @@ A result contains:
 - validation findings;
 - warnings and structured errors;
 - generated artifact references;
-- bridge and agent versions.
+- bridge and agent versions;
+- audit/provenance references.
+
+### 7.1 Command authorization contract
+
+Controller-to-agent commands must be signed or otherwise bound to authenticated controller identity. The authorization record must include:
+
+- signer identity;
+- key identity or session identity;
+- command ID and correlation ID;
+- project/context tuple;
+- issued-at and expiry timestamps;
+- nonce or monotonic sequence number;
+- approval reference where required;
+- signature or verification reference.
+
+The agent rejects commands with invalid signatures, unknown key/session identity, stale sequence numbers, replayed nonces, expired timestamps or mismatched context. Rejections are audited and are never forwarded as executable bridge commands.
+
+Agent-to-bridge sessions must be authenticated even over loopback. The local session must be short-lived, rotatable and scoped to the registered model/session. Session rotation must invalidate previous tokens after a bounded overlap. Replayed, expired or mismatched bridge messages are rejected and audited.
 
 ## 8. Stable identity
 
@@ -336,6 +367,9 @@ Use a SketchUp attribute dictionary named `dios`.
 Model keys:
 
 - `project_id`
+- `stage_id`
+- `revision_set_id`
+- `snapshot_id`
 - `model_id`
 - `source_revision`
 - `scene_state_revision`
@@ -440,7 +474,31 @@ abort operation
 
 This preserves one-command/one-undo behaviour.
 
-## 11. Transform and units contract
+## 11. Dry-run semantics
+
+`dry_run: true` is explicitly non-mutating.
+
+The bridge may perform validation and planning only. It must return:
+
+- planned affected object IDs;
+- resolved assets and checksum status;
+- context and precondition findings;
+- expected diff summary;
+- warnings;
+- approval requirement;
+- validation status;
+- structured failure codes where applicable.
+
+A dry run must not:
+
+- start a mutating SketchUp operation;
+- persist model/entity attributes;
+- advance `scene_state_revision`;
+- create, delete, transform, tag or materialize an object;
+- export a canonical artifact;
+- update DIOS canonical state.
+
+## 12. Transform and units contract
 
 Wire units are millimetres and degrees.
 
@@ -465,7 +523,7 @@ Supported coordinate frames:
 
 No implicit scale inference is allowed during mutation.
 
-## 12. Asset handling
+## 13. Asset handling
 
 Asset flow:
 
@@ -494,7 +552,7 @@ Representation statuses:
 - `EXACT_PRODUCT`
 - `UNREGISTERED_LOCAL`
 
-## 13. Manual change capture
+## 14. Manual change capture
 
 The bridge maintains a last-approved baseline for registered objects.
 
@@ -502,6 +560,10 @@ A manual-change proposal records:
 
 ```json
 {
+  "project_id": "P-001",
+  "stage_id": "STAGE-01",
+  "revision_set_id": "RS-001",
+  "snapshot_id": "SNAP-001",
   "object_id": "WC-01",
   "change_type": "TRANSFORM_CHANGED",
   "before": {},
@@ -523,15 +585,18 @@ Initial change types:
 
 Deletion is never accepted silently. A locally missing managed object becomes a proposal or conflict.
 
-## 14. Validation
+## 15. Validation
 
 Pre-execution checks:
 
 - schema version supported;
 - command not expired;
+- command authorization/signature valid;
+- nonce or sequence not replayed;
 - workstation and application capability match;
-- project/model IDs match the open model;
-- expected source and scene revisions match;
+- `project_id`, `stage_id`, `revision_set_id`, `snapshot_id` and `model_id` match the open model;
+- expected source hash/revision matches;
+- `scene_state_revision` matches when supplied for local working-state protection;
 - object IDs are unique;
 - asset exists and checksum matches;
 - payload ranges and sizes are valid;
@@ -546,7 +611,8 @@ Post-execution checks:
 - no unexpected affected managed objects;
 - no silent duplication;
 - operation result can be serialized;
-- model state revision advances exactly once.
+- model state revision advances exactly once for mutating commands;
+- dry-run results did not mutate model or scene state.
 
 Failure classes:
 
@@ -554,6 +620,10 @@ Failure classes:
 - `REVISION_MISMATCH`
 - `SCHEMA_INVALID`
 - `COMMAND_EXPIRED`
+- `AUTHORIZATION_FAILED`
+- `SIGNATURE_INVALID`
+- `REPLAY_DETECTED`
+- `SESSION_EXPIRED`
 - `CAPABILITY_UNAVAILABLE`
 - `ASSET_NOT_FOUND`
 - `ASSET_CHECKSUM_MISMATCH`
@@ -564,7 +634,7 @@ Failure classes:
 - `POSTCONDITION_FAILED`
 - `LOCAL_CHANGE_CONFLICT`
 
-## 15. Security model
+## 16. Security model
 
 Network identity and application authorization are separate layers.
 
@@ -573,12 +643,17 @@ Required controls:
 - Tailscale private connectivity;
 - explicit controller-agent pairing;
 - revocable workstation registration;
+- controller-to-agent authorization/signature provenance;
+- signer and key/session identity on each command;
 - short-lived sessions;
+- authenticated agent-to-bridge local session;
+- nonce or monotonic sequence replay protection;
+- key/session rotation with bounded overlap;
 - command allowlist;
 - strict JSON validation;
 - command expiry and replay protection;
 - no arbitrary code execution;
-- localhost-only bridge API;
+- localhost-only bridge API that still requires local authentication;
 - restricted local asset cache;
 - encrypted transport through the private network;
 - audit trail for all accepted and rejected commands;
@@ -595,7 +670,9 @@ other peers
 → no connector access by default
 ```
 
-## 16. Observability
+Rejected or unauthenticated commands must be audited with sanitized metadata: command ID, context tuple, signer/key identity when known, failure class, timestamp and component version. They must not include private drawing contents in routine logs.
+
+## 17. Observability
 
 Controller view:
 
@@ -603,7 +680,7 @@ Controller view:
 - agent version;
 - SketchUp running/not running;
 - bridge connected/disconnected;
-- open model ID and revision;
+- open model ID and full canonical context tuple;
 - queued/running/failed command counts;
 - last successful sync;
 - last error class;
@@ -614,6 +691,7 @@ Bridge panel:
 - local agent state;
 - paired controller name;
 - current model registration;
+- `project_id`, `stage_id`, `revision_set_id`, `snapshot_id`;
 - source and scene revisions;
 - queue state;
 - current command;
@@ -622,7 +700,7 @@ Bridge panel:
 - manual-change count;
 - reconnect and resync actions.
 
-## 17. Versioning and compatibility
+## 18. Versioning and compatibility
 
 Each layer exposes a version:
 
@@ -637,7 +715,7 @@ Compatibility is negotiated before command delivery.
 
 A command must be rejected when its required capability or schema version is not supported. The agent and bridge must not silently reinterpret unknown fields or command types.
 
-## 18. Failure handling
+## 19. Failure handling
 
 ### Workstation offline
 
@@ -655,6 +733,10 @@ Bridge returns `CONTEXT_MISMATCH`; no mutation occurs.
 
 Bridge returns `REVISION_MISMATCH`; DIOS requests review/resync.
 
+### Authorization, signature or replay failure
+
+Agent or bridge returns `AUTHORIZATION_FAILED`, `SIGNATURE_INVALID` or `REPLAY_DETECTED`; no command is executed and the rejection is audited.
+
 ### SketchUp operation fails
 
 Bridge aborts the operation and returns `EXECUTION_FAILED` with a sanitized error.
@@ -667,7 +749,7 @@ Agent stores the result durably and retries with the same command/result identit
 
 The bridge returns the stored prior result for the same completed command ID and does not execute twice.
 
-## 19. Delivery stages
+## 20. Delivery stages
 
 ### Stage A — Protocol and mock
 
@@ -707,15 +789,18 @@ The bridge returns the stored prior result for the same completed command ID and
 - process health and restart;
 - only after live connector reliability is proven.
 
-## 20. Acceptance criteria for the architecture
+## 21. Acceptance criteria for the architecture
 
 The design is considered implementable when:
 
 - all boundaries have explicit ownership;
 - the extension is local-only and cannot receive arbitrary network code;
 - controller, agent and bridge share versioned schemas;
-- revision mismatch blocks mutation;
-- commands are idempotent and replay-safe;
+- `project_id`, `stage_id`, `revision_set_id` and `snapshot_id` mismatch blocks mutation;
+- `scene_state_revision` is separate and limited to local working representation drift detection;
+- commands are authorized, idempotent and replay-safe;
+- loopback is not treated as authentication;
+- dry-run is non-mutating and returns structured planned effects;
 - every mutation is one undoable SketchUp operation;
 - assets are checksum-controlled and path-restricted;
 - manual changes remain proposals;
