@@ -6,16 +6,18 @@ Status: `DESIGN / ARCHITECTURE CANDIDATE / NOT PRODUCTION`
 
 DIOS treats drawing revisions as immutable boundaries between project states.
 
-A revision is not only a filename suffix or title-block field. It defines the source boundary for a specific stage of the project and the set of changes that became valid at that boundary.
+A revision is not only a filename suffix or title-block field. It defines the source boundary for a specific discipline/source lineage and may contribute to a candidate project state.
 
 The core rule is:
 
 ```text
 Source revision
-→ normalized project state
-→ change set from previous revision
+→ candidate RevisionSet
+→ candidate ProjectStateSnapshot
+→ ChangeSet from previous approved snapshot
 → validation
-→ approved project stage
+→ human approval decision
+→ approved snapshot and, only when explicitly approved, project-stage transition
 ```
 
 Visualization, measurement, review and export modules must consume an explicit revision or approved revision set. They must never silently combine incompatible revisions.
@@ -79,7 +81,7 @@ Possible `effective_status` values:
 
 ### ProjectStage
 
-Represents an approved project state bounded by one or more source revisions.
+Represents a human-approved business/design stage that may be bound to one or more approved revision sets.
 
 Required fields:
 
@@ -93,6 +95,8 @@ Required fields:
 - `approved_by`
 - `status`
 
+`baseline_revision_set_id` is nullable while the stage is being created. A `ProjectStage` may be created first as `DRAFT`; only after the compatible `RevisionSet` is approved may the stage baseline be assigned. A `RevisionSet.stage_id` may also be nullable while compatibility is being evaluated. This prevents a bootstrap cycle between stage creation and revision-set creation.
+
 Possible statuses:
 
 - `DRAFT`
@@ -103,7 +107,7 @@ Possible statuses:
 
 ### RevisionSet
 
-A controlled set of compatible revisions used together for one project stage.
+A controlled set of compatible revisions used together for one project state or stage candidate.
 
 Required fields:
 
@@ -116,6 +120,8 @@ Required fields:
 - `created_at`
 - `approved_at`
 
+`stage_id` is nullable for candidate revision sets. A revision set may be approved as a project-state boundary without automatically creating or promoting a new project stage.
+
 Possible `compatibility_status` values:
 
 - `VALID`
@@ -126,7 +132,7 @@ Possible `compatibility_status` values:
 
 ### ProjectStateSnapshot
 
-Immutable normalized DIOS state produced from one approved revision set.
+Immutable normalized DIOS state produced from one revision set.
 
 Required fields:
 
@@ -139,6 +145,8 @@ Required fields:
 - `validation_status`
 - `supersedes_snapshot_id`
 
+`stage_id` is nullable for candidate snapshots. A snapshot becomes an approved stage baseline only through a separate human-approved stage decision.
+
 ### RevisionChangeSet
 
 Represents differences between two project state snapshots.
@@ -146,6 +154,8 @@ Represents differences between two project state snapshots.
 Required fields:
 
 - `change_set_id`
+- `project_id`
+- `stage_id`
 - `from_snapshot_id`
 - `to_snapshot_id`
 - `from_revision_set_id`
@@ -155,26 +165,33 @@ Required fields:
 - `validation_status`
 - `approval_status`
 
+`stage_id` is nullable when a change set compares a candidate snapshot that has not yet been attached to an approved project stage.
+
 ## 3. Revision boundary rule
 
-A new authoritative revision creates a new candidate project state.
+A new authoritative revision creates a candidate project state. It does not overwrite history and does not automatically create or promote a new `ProjectStage`.
 
 ```text
 Revision R1
+→ RevisionSet RS1
 → Snapshot S1
 
 Revision R2
-→ Snapshot S2
+→ candidate RevisionSet RS2
+→ candidate Snapshot S2
 → ChangeSet S1→S2
+→ approval decision
+→ approved Snapshot S2, optional explicit stage transition
 
 Revision R3
-→ Snapshot S3
+→ candidate RevisionSet RS3
+→ candidate Snapshot S3
 → ChangeSet S2→S3
 ```
 
 DIOS does not overwrite `S1` when `R2` arrives. It preserves both states and records the transition.
 
-Every downstream artifact must reference:
+Every downstream artifact must reference the full canonical context tuple:
 
 - `project_id`
 - `stage_id`
@@ -182,11 +199,13 @@ Every downstream artifact must reference:
 - `snapshot_id`
 - source drawing and revision evidence
 
+`scene_state_revision` is not part of the canonical context tuple. It is local state for a working representation such as SketchUp.
+
 ## 4. Change classification
 
-Each change between snapshots must be classified.
+Each change between snapshots must be classified by semantic source/change event. Downstream impact is recorded separately.
 
-Initial classes:
+Initial semantic change classes:
 
 - `OBJECT_ADDED`
 - `OBJECT_REMOVED`
@@ -202,9 +221,12 @@ Initial classes:
 - `LEVEL_CHANGED`
 - `SYSTEM_RELATION_CHANGED`
 - `ANNOTATION_CHANGED`
-- `QUANTITY_IMPACT`
-- `VISUALIZATION_ONLY_CHANGE`
+- `QUANTITY_RULE_CHANGED`
+- `DERIVED_REPRESENTATION_CHANGED`
+- `COORDINATION_CONFLICT`
 - `UNKNOWN_CHANGE`
+
+`VISUALIZATION_ONLY_CHANGE` is not source geometry authority. If retained by an implementation for compatibility, it must be treated as `DERIVED_REPRESENTATION_CHANGED` and must not change canonical source geometry, dimensions, quantities or revision authority.
 
 Each change record must include:
 
@@ -216,7 +238,7 @@ Each change record must include:
 - confidence;
 - validation status;
 - approval status;
-- downstream impact.
+- `quantity_impact`, `visualization_impact` and `coordination_impact` as downstream impact dimensions.
 
 ## 5. Object continuity across revisions
 
@@ -298,12 +320,13 @@ When a new revision is accepted:
 1. DIOS creates a new revision record.
 2. It determines whether the revision supersedes an existing revision.
 3. It builds or updates a candidate revision set.
-4. It reconstructs the normalized project state.
-5. It compares the new snapshot with the previous approved snapshot.
+4. It reconstructs the normalized candidate project state.
+5. It compares the candidate snapshot with the previous approved snapshot.
 6. It creates a change set.
 7. It marks dependent artifacts stale where affected.
 8. It requires review and approval.
-9. It promotes the snapshot to the next approved project stage.
+9. It records the approved snapshot or rejection.
+10. It creates or promotes a project stage only when there is a separate explicit human-approved stage decision.
 
 Dependent artifacts may include:
 
@@ -338,9 +361,10 @@ It may not independently combine geometry from one revision with object placemen
 
 Each visualization artifact must record:
 
-- `snapshot_id`
-- `revision_set_id`
+- `project_id`
 - `stage_id`
+- `revision_set_id`
+- `snapshot_id`
 - renderer and adapter versions;
 - asset versions;
 - camera/style configuration;
@@ -359,7 +383,7 @@ The SketchUp working model stores:
 - `source_revision`
 - `scene_state_revision`
 
-Before any mutation, the Bridge verifies that the open model matches the command target.
+Before any mutation, the Bridge verifies that the open model matches the command target full canonical context tuple.
 
 Mismatch examples:
 
@@ -368,7 +392,7 @@ Mismatch examples:
 - architecture revision matches but structural baseline differs;
 - the model was copied from another project or stage.
 
-Any mismatch returns `REVISION_MISMATCH` or `CONTEXT_MISMATCH` and blocks mutation.
+Any mismatch returns `REVISION_MISMATCH` or `CONTEXT_MISMATCH` and blocks mutation. A matching `scene_state_revision` alone is never sufficient.
 
 ## 11. Historical comparison
 
@@ -397,7 +421,9 @@ Comparison views are derived artifacts. They never merge stages into a new canon
 - every change set has explicit from/to snapshots;
 - unresolved identity changes remain `IDENTITY_UNCERTAIN`;
 - revision conflicts block final downstream artifacts;
-- historical snapshots remain immutable.
+- historical snapshots remain immutable;
+- every mutable connector command/result/registration carries `project_id`, `stage_id`, `revision_set_id` and `snapshot_id`;
+- no project stage is created or promoted without explicit human approval.
 
 ## 13. Architectural principle
 
