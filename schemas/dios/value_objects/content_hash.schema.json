@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"content_hash.schema.json","title":"Content Hash","description":"Algorithm-qualified immutable content digest.","type":"object","additionalProperties":false,"required":["algorithm","value"],"properties":{"algorithm":{"type":"string","enum":["SHA256"]},"value":{"type":"string","pattern":"^[a-f0-9]{64}$"}}}
