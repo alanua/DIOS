@@ -54,26 +54,36 @@ class EntityEvidenceSchemaTests(unittest.TestCase):
                 target = SCHEMA_DIR / ref.split("#", 1)[0]
                 self.assertTrue(target.is_file(), msg=f"{filename} has unresolved $ref {ref}")
 
-    def test_entity_identity_is_separate_from_source_representations(self) -> None:
+    def test_entity_identity_is_separate_from_representations_and_continuity_edges(self) -> None:
         schema = self.load_schemas()["technical_entity.schema.json"]
         self.assertIn("representation_refs", schema["properties"])
-        self.assertIn("continuity_relations", schema["properties"])
+        self.assertIn("continuity_relation_refs", schema["properties"])
+        self.assertNotIn("continuity_relations", schema["properties"])
         self.assertNotIn("geometry", schema["properties"])
         self.assertNotIn("document_ref", schema["required"])
+        active_rule = schema["allOf"][0]
+        self.assertEqual(
+            active_rule["if"]["properties"]["lifecycle"]["properties"]["status"]["const"],
+            "ACTIVE",
+        )
+        self.assertEqual(
+            active_rule["then"]["properties"]["representation_refs"]["minItems"],
+            1,
+        )
 
-    def test_representation_is_source_bound_and_legend_is_not_an_instance(self) -> None:
+    def test_representation_uses_one_evidence_location_as_source_binding(self) -> None:
         schema = self.load_schemas()["entity_representation.schema.json"]
         required = set(schema["required"])
         self.assertTrue(
             {
                 "technical_entity_id",
-                "technical_source_revision_id",
-                "document_ref",
                 "evidence_location",
                 "representation_role",
                 "physical_identity_status",
             }.issubset(required)
         )
+        self.assertNotIn("technical_source_revision_id", schema["properties"])
+        self.assertNotIn("document_ref", schema["properties"])
         legend_rule = schema["allOf"][0]
         self.assertEqual(
             legend_rule["if"]["properties"]["representation_role"]["const"],
@@ -84,17 +94,18 @@ class EntityEvidenceSchemaTests(unittest.TestCase):
             "NON_INSTANCE",
         )
 
-    def test_observation_requires_evidence_and_responsibility_trace(self) -> None:
+    def test_observation_binds_revision_set_and_requires_evidence_and_responsibility(self) -> None:
         schema = self.load_schemas()["observation.schema.json"]
         required = set(schema["required"])
         self.assertTrue(
             {
-                "technical_source_revision_id",
+                "revision_set_id",
                 "evidence_locations",
                 "responsibility_trace",
                 "data_class",
             }.issubset(required)
         )
+        self.assertNotIn("technical_source_revision_id", schema["properties"])
         self.assertEqual(schema["properties"]["evidence_locations"]["minItems"], 1)
         inferred_rule = schema["allOf"][0]
         self.assertEqual(
@@ -103,8 +114,9 @@ class EntityEvidenceSchemaTests(unittest.TestCase):
         )
         self.assertIn("confidence", inferred_rule["then"]["required"])
 
-    def test_continuity_relations_cover_split_merge_and_unresolved_match(self) -> None:
+    def test_continuity_relations_are_addressable_and_cover_conflict_shapes(self) -> None:
         schema = json.loads(CONTINUITY_SCHEMA.read_text(encoding="utf-8"))
+        self.assertIn("continuity_relation_id", schema["required"])
         relation_types = set(schema["properties"]["relation_type"]["enum"])
         self.assertTrue(
             {
