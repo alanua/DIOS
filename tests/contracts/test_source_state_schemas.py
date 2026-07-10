@@ -63,7 +63,11 @@ class SourceStateSchemaTests(unittest.TestCase):
                 "authority_scopes",
             }.issubset(required)
         )
-        self.assertEqual(schema["properties"]["authority_scopes"]["minItems"], 1)
+        authority = schema["properties"]["authority_scopes"]
+        self.assertEqual(authority["minItems"], 1)
+        self.assertTrue(authority["uniqueItems"])
+        issue_states = schema["properties"]["source_issue_status"]["enum"]
+        self.assertNotIn("SUPERSEDED", issue_states)
 
     def test_revision_set_members_pin_revision_identity_and_hash(self) -> None:
         schema = self.load_schemas()["revision_set.schema.json"]
@@ -75,15 +79,24 @@ class SourceStateSchemaTests(unittest.TestCase):
         )
         self.assertEqual(schema["properties"]["members"]["minItems"], 1)
 
-    def test_snapshot_does_not_require_project_stage_and_acceptance_requires_approval(self) -> None:
+    def test_snapshot_uses_shared_lifecycle_and_active_state_requires_review_receipts(self) -> None:
         schema = self.load_schemas()["technical_snapshot.schema.json"]
         self.assertNotIn("project_stage_ref", schema["required"])
-        accepted_rule = schema["allOf"][0]
+        self.assertNotIn("snapshot_status", schema["properties"])
+        active_rule = schema["allOf"][0]
         self.assertEqual(
-            accepted_rule["if"]["properties"]["snapshot_status"]["const"],
-            "ACCEPTED",
+            active_rule["if"]["properties"]["lifecycle"]["properties"]["status"]["const"],
+            "ACTIVE",
         )
-        self.assertIn("approval_ref", accepted_rule["then"]["required"])
+        self.assertTrue(
+            {"approval_ref", "validation_result_refs"}.issubset(
+                active_rule["then"]["required"]
+            )
+        )
+        self.assertEqual(
+            active_rule["then"]["properties"]["verification_status"]["const"],
+            "VERIFIED",
+        )
 
 
 if __name__ == "__main__":
