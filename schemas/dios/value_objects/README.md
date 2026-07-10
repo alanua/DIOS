@@ -18,6 +18,7 @@ These schemas define reusable primitives for DIOS domain contracts. They do not 
 - `confidence_assessment.schema.json` — confidence separated from verification
 - `responsibility_trace.schema.json` — human/model/deterministic responsibility
 - `deterministic_receipt.schema.json` — replayable calculation receipt
+- `entity_continuity.schema.json` — evidence-backed continue/split/merge/replace/remove/introduce/unresolved relations across exact revision sets
 
 ## Hard rules
 
@@ -27,5 +28,7 @@ These schemas define reusable primitives for DIOS domain contracts. They do not 
 - Screenshots, generated visuals, chat messages, and exports are not geometry or quantity authority.
 - Deterministic receipts record exact method version, input/output hashes, operation order, units, and replay state.
 - Domain records reference Skeleton-owned records by stable identifier instead of redefining them.
+- Entity continuity is evidence-backed and context-bound; unresolved continuity blocks silent quantity or property carry-forward.
+- Split and merge relations are explicit and may not be collapsed into one-to-one identity guesses.
 
 These files are draft inputs to DIOS issues #9, #15, and #16. They are not frozen schemas and must not be used for production persistence or real-project ingestion.
