@@ -37,6 +37,19 @@ active MeasurementMethod
 → deterministic QuantityRecord
 ```
 
+## Validation-change-invalidation chain
+
+```text
+exact technical context
+→ versioned validation rule
+→ TechnicalValidationResult
+→ TechnicalChangeSet between exact baseline and target contexts
+→ TechnicalInvalidation propagation graph
+→ revalidate / remeasure / reaggregate / reapprove / block use
+```
+
+Validation, change detection, and invalidation create immutable records. They never silently mutate accepted records, promote project stages, or apply `last-write-wins` conflict resolution.
+
 ## Contracts
 
 - `technical_source_revision.schema.json` attaches technical source class, exact content hash, authority scopes, document inventory, verification, privacy, and lifecycle to one immutable Skeleton artifact revision.
@@ -49,6 +62,9 @@ active MeasurementMethod
 - `measurement_method.schema.json` defines one immutable method version, scale requirement, unit policy, representation selection, duplicate handling, deductions, typed calculation plan, and validation fixtures.
 - `measurement_record.schema.json` records one result with exact source context, method version/hash, selected representations, evidence, scale state, formula, adjustments, values, deterministic receipt, and validation references.
 - `quantity_record.schema.json` aggregates only active verified measurements under a typed calculation plan and explicit scope. It is not an estimate, price, invoice, or payment-entitlement record.
+- `technical_validation_result.schema.json` records the immutable outcome of one versioned validation rule set against exact revision context, subjects, findings, responsibility, and optional deterministic receipt.
+- `technical_change_set.schema.json` records a detected delta between exact baseline and target revision sets, including before/after evidence and separate semantic, quantity, visual, and coordination impacts.
+- `technical_invalidation.schema.json` records an explicit stale-propagation result, affected targets, dependency edges, required recovery actions, and validation references. It never deletes prior records.
 
 ## Hard rules
 
@@ -75,6 +91,14 @@ active MeasurementMethod
 - A quantity aggregates active verified measurement records only and requires a deterministic receipt.
 - Active quantities require validation references, `VERIFIED` status, and a Skeleton approval reference.
 - Quantity records contain no commercial price, cost, invoice, payment, entitlement, or design-approval semantics.
+- Validation outcome and verification status are distinct: a failed result can itself be verified.
+- `PASS` contains no findings; every warning, failure, or blocked evaluation contains at least one structured finding.
+- Change sets describe `DETECTED` technical deltas only. They do not apply mutations, resolve conflicts, or promote project stages.
+- Semantic, quantity, visual, and coordination impacts are separate channels and must not be collapsed into one generic impact flag.
+- Active change sets require validation references, a Skeleton decision reference, and `VERIFIED` status.
+- Invalidation targets can become `STALE`, `REVALIDATION_REQUIRED`, `BLOCKED`, or `VOID`; they cannot remain `CURRENT` inside an invalidation record.
+- Every invalidation target declares a propagation path and one recovery action: revalidate, remeasure, reaggregate, review continuity, reapprove, regenerate a derivative, or block use.
+- Invalidation records never delete, overwrite, or silently rewrite earlier accepted records.
 
 ## Known custom invariants
 
@@ -101,6 +125,17 @@ The following require invariant tests in addition to JSON Schema:
 - active measurement references one compatible snapshot and at least one valid validation result;
 - every quantity input measurement is active, verified, in the same revision set/snapshot, and used at most once after entity deduplication;
 - quantity result equals replay of its typed calculation plan over the exact accepted inputs;
-- implausible magnitude checks are discipline/profile rules and cannot be inferred from schema shape alone.
+- implausible magnitude checks are discipline/profile rules and cannot be inferred from schema shape alone;
+- validation subject references, findings, and evidence locations all resolve within the declared project and revision context;
+- validation outcome is consistent with finding severity and count;
+- baseline and target revision sets in a change set are distinct and all before/after evidence resolves to the correct side;
+- change items do not contain contradictory added/removed/split/merge claims for the same identity pair;
+- detected impact channels are independently justified by evidence or validation;
+- active change-set decision and validation references resolve to the same context and head revision-set pair;
+- every invalidation target is reachable from a trigger through the declared propagation edges and path;
+- propagation does not cross unrelated project contexts or silently skip intermediate dependencies;
+- stale measurements force dependent quantities and derivative artifacts into revalidation, reaggregation, regeneration, or blocked-use state;
+- approval references become stale when their exact technical context changes;
+- voiding is allowed only through an explicit invalidation reason and never by in-place deletion.
 
 These contracts are draft inputs to issues #9, #15, and #16 and must not be used for production persistence or real-project ingestion before architecture freeze.
