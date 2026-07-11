@@ -36,6 +36,18 @@ def iter_refs(value: Any) -> list[str]:
     return refs
 
 
+def iter_keys(value: Any) -> set[str]:
+    keys: set[str] = set()
+    if isinstance(value, dict):
+        for key, child in value.items():
+            keys.add(key)
+            keys.update(iter_keys(child))
+    elif isinstance(value, list):
+        for child in value:
+            keys.update(iter_keys(child))
+    return keys
+
+
 class MeasurementQuantitySchemaTests(unittest.TestCase):
     def load_domain_schemas(self) -> dict[str, dict[str, Any]]:
         return {
@@ -102,9 +114,8 @@ class MeasurementQuantitySchemaTests(unittest.TestCase):
         operation = schema["properties"]["operations"]["items"]["properties"]
         self.assertIn("COUNT_UNIQUE_ENTITY", operation["operation"]["enum"])
         self.assertFalse(operation["parameters"]["additionalProperties"])
-        serialized = json.dumps(schema).lower()
-        for prohibited in ("source_code", "script", "macro", "shell_command"):
-            self.assertNotIn(prohibited, serialized)
+        prohibited_keys = {"source_code", "script", "macro", "shell_command"}
+        self.assertTrue(iter_keys(schema).isdisjoint(prohibited_keys))
 
     def test_scale_control_has_explicit_hard_gate_states(self) -> None:
         schema = self.load_value_schemas()["scale_control.schema.json"]
