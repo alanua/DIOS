@@ -23,6 +23,10 @@ These schemas define reusable primitives for DIOS domain contracts. They do not 
 - `unit_value.schema.json` — numeric value with explicit measurement kind and unit
 - `scale_control.schema.json` — verified/not-required/unverified/conflict scale state with evidence
 - `calculation_plan.schema.json` — bounded typed operations and human-readable formula; never executable source code
+- `validation_outcome.schema.json` — clean pass, pass with findings, failure, or blocked evaluation
+- `validation_severity.schema.json` — info/warning/error/blocker finding severity
+- `technical_impact.schema.json` — separate semantic, quantity, visual, and coordination impact channels
+- `stale_state.schema.json` — current/stale/revalidation-required/blocked/void technical state vocabulary
 
 ## Hard rules
 
@@ -38,5 +42,9 @@ These schemas define reusable primitives for DIOS domain contracts. They do not 
 - Unit conversion is explicit. Original and normalized values remain separate.
 - Calculation plans contain only the bounded `DIOS_TYPED_OPS_V1` operation vocabulary and declared parameters.
 - A calculation plan has an immutable hash; arbitrary scripts, macros, shell commands, or source-code payloads are outside this contract.
+- Validation outcome is separate from verification status: the result can be verified as a failure or blocker.
+- `PASS` has no findings; `PASS_WITH_WARNINGS`, `FAIL`, and `BLOCKED` require at least one structured finding.
+- Semantic, quantity, visual, and coordination impacts are assessed independently; one channel never implies another.
+- Stale state is explicit and append-only. Invalidation never deletes or silently rewrites prior records.
 
 These files are draft inputs to DIOS issues #9, #15, and #16. They are not frozen schemas and must not be used for production persistence or real-project ingestion.
