@@ -19,6 +19,10 @@ These schemas define reusable primitives for DIOS domain contracts. They do not 
 - `responsibility_trace.schema.json` — human/model/deterministic responsibility
 - `deterministic_receipt.schema.json` — replayable calculation receipt
 - `entity_continuity.schema.json` — evidence-backed continue/split/merge/replace/remove/introduce/unresolved relations across exact revision sets
+- `measurement_kind.schema.json` — length/area/volume/count/weight family
+- `unit_value.schema.json` — numeric value with explicit measurement kind and unit
+- `scale_control.schema.json` — verified/not-required/unverified/conflict scale state with evidence
+- `calculation_plan.schema.json` — bounded typed operations and human-readable formula; never executable source code
 
 ## Hard rules
 
@@ -30,5 +34,9 @@ These schemas define reusable primitives for DIOS domain contracts. They do not 
 - Domain records reference Skeleton-owned records by stable identifier instead of redefining them.
 - Entity continuity is evidence-backed and context-bound; unresolved continuity blocks silent quantity or property carry-forward.
 - Split and merge relations are explicit and may not be collapsed into one-to-one identity guesses.
+- Scale status is explicit. `VERIFIED` requires evidence and a positive scale factor; `UNVERIFIED` and `CONFLICT` cannot pass a scale-required method.
+- Unit conversion is explicit. Original and normalized values remain separate.
+- Calculation plans contain only the bounded `DIOS_TYPED_OPS_V1` operation vocabulary and declared parameters.
+- A calculation plan has an immutable hash; arbitrary scripts, macros, shell commands, or source-code payloads are outside this contract.
 
 These files are draft inputs to DIOS issues #9, #15, and #16. They are not frozen schemas and must not be used for production persistence or real-project ingestion.
