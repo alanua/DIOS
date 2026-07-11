@@ -1,0 +1,429 @@
+{
+  "suite_id": "DIOS_CORE_V0_SYNTHETIC",
+  "classification": "PUBLIC_SAFE_SYNTHETIC_ONLY",
+  "schema_version": "0.1.0-draft",
+  "cases": [
+    {
+      "case_id": "COREV0-01",
+      "scenario_type": "TWO_REVISIONS_ONE_SHEET",
+      "expected_status": "VALID",
+      "expected_codes": [],
+      "data": {
+        "artifact_id": "artifact:sheet:A101",
+        "revisions": [
+          {
+            "technical_source_revision_id": "tsr:A101:R1",
+            "artifact_revision_id": "artifact-rev:A101:R1",
+            "content_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+            "revision_label": "R1"
+          },
+          {
+            "technical_source_revision_id": "tsr:A101:R2",
+            "artifact_revision_id": "artifact-rev:A101:R2",
+            "content_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+            "revision_label": "R2"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "COREV0-02",
+      "scenario_type": "EXACT_REVISION_SET_AND_SNAPSHOT",
+      "expected_status": "VALID",
+      "expected_codes": [],
+      "data": {
+        "revision_set": {
+          "revision_set_id": "revset:alpha",
+          "set_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "member_ids": [
+            "tsr:A101:R2",
+            "tsr:S101:R1"
+          ],
+          "member_hashes": [
+            "2222222222222222222222222222222222222222222222222222222222222222",
+            "3333333333333333333333333333333333333333333333333333333333333333"
+          ]
+        },
+        "snapshot": {
+          "technical_snapshot_id": "snapshot:alpha",
+          "revision_set_id": "revset:alpha",
+          "revision_set_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "technical_state_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      }
+    },
+    {
+      "case_id": "COREV0-03",
+      "scenario_type": "STABLE_ENTITY_CONTINUITY",
+      "expected_status": "VALID",
+      "expected_codes": [],
+      "data": {
+        "relations": [
+          {
+            "continuity_relation_id": "continuity:room-01",
+            "relation_type": "CONTINUES_AS",
+            "source_revision_set_id": "revset:old",
+            "target_revision_set_id": "revset:new",
+            "source_entity_ids": [
+              "entity:room-01"
+            ],
+            "target_entity_ids": [
+              "entity:room-01"
+            ],
+            "verification_status": "VERIFIED"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "COREV0-04",
+      "scenario_type": "SPLIT_AND_MERGE_CONFLICT",
+      "expected_status": "INVALID",
+      "expected_codes": [
+        "ENTITY_CONTINUITY_CONFLICT"
+      ],
+      "data": {
+        "relations": [
+          {
+            "continuity_relation_id": "continuity:c1",
+            "relation_type": "CONTINUES_AS",
+            "source_revision_set_id": "revset:old",
+            "target_revision_set_id": "revset:new",
+            "source_entity_ids": [
+              "entity:space-01"
+            ],
+            "target_entity_ids": [
+              "entity:space-01"
+            ],
+            "verification_status": "VERIFIED"
+          },
+          {
+            "continuity_relation_id": "continuity:c2",
+            "relation_type": "SPLIT_INTO",
+            "source_revision_set_id": "revset:old",
+            "target_revision_set_id": "revset:new",
+            "source_entity_ids": [
+              "entity:space-01"
+            ],
+            "target_entity_ids": [
+              "entity:space-01A",
+              "entity:space-01B"
+            ],
+            "verification_status": "NEEDS_REVIEW"
+          },
+          {
+            "continuity_relation_id": "continuity:c3",
+            "relation_type": "MERGED_FROM",
+            "source_revision_set_id": "revset:old",
+            "target_revision_set_id": "revset:new",
+            "source_entity_ids": [
+              "entity:space-02",
+              "entity:space-03"
+            ],
+            "target_entity_ids": [
+              "entity:space-01"
+            ],
+            "verification_status": "NEEDS_REVIEW"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "COREV0-05",
+      "scenario_type": "CONTROL_DIMENSION_SCALE_VERIFIED",
+      "expected_status": "VALID",
+      "expected_codes": [],
+      "data": {
+        "method": {
+          "scale_requirement": "CONTROL_DIMENSION_REQUIRED"
+        },
+        "scale_control": {
+          "status": "VERIFIED",
+          "drawing_value": 100.0,
+          "drawing_unit": "mm",
+          "real_value": 5000.0,
+          "real_unit": "mm",
+          "scale_factor": 50.0,
+          "evidence_locations": [
+            "evidence:A101:box-1"
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "COREV0-06",
+      "scenario_type": "UNVERIFIED_SCALE_MEASUREMENT",
+      "expected_status": "INVALID",
+      "expected_codes": [
+        "UNVERIFIED_SCALE"
+      ],
+      "data": {
+        "method": {
+          "scale_requirement": "CONTROL_DIMENSION_REQUIRED"
+        },
+        "measurement": {
+          "measurement_record_id": "measurement:wall-01",
+          "scale_control": {
+            "status": "UNVERIFIED"
+          },
+          "result_value": {
+            "measurement_kind": "LENGTH",
+            "value": 12.4,
+            "unit": "m"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "COREV0-07",
+      "scenario_type": "ROOM_WALL_OPENING_FULL_EVIDENCE",
+      "expected_status": "VALID",
+      "expected_codes": [],
+      "data": {
+        "revision_set_id": "revset:alpha",
+        "measurements": [
+          {
+            "measurement_record_id": "measurement:room-01-area",
+            "technical_entity_id": "entity:room-01",
+            "kind": "AREA",
+            "method_id": "method:polygon-area",
+            "formula": "POLYGON_AREA(room-01)",
+            "unit": "m2",
+            "evidence_locations": [
+              "evidence:A101:room-01"
+            ],
+            "scale_status": "VERIFIED",
+            "verification_status": "VERIFIED"
+          },
+          {
+            "measurement_record_id": "measurement:wall-01-length",
+            "technical_entity_id": "entity:wall-01",
+            "kind": "LENGTH",
+            "method_id": "method:wall-axis-length",
+            "formula": "GEOMETRY_LENGTH(wall-01)",
+            "unit": "m",
+            "evidence_locations": [
+              "evidence:A101:wall-01"
+            ],
+            "scale_status": "VERIFIED",
+            "verification_status": "VERIFIED"
+          },
+          {
+            "measurement_record_id": "measurement:opening-01-area",
+            "technical_entity_id": "entity:opening-01",
+            "kind": "AREA",
+            "method_id": "method:opening-area",
+            "formula": "width * height",
+            "unit": "m2",
+            "evidence_locations": [
+              "evidence:A101:opening-01",
+              "evidence:A401:opening-height"
+            ],
+            "scale_status": "VERIFIED",
+            "verification_status": "VERIFIED"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "COREV0-08",
+      "scenario_type": "STRUCTURAL_CROSS_CHECK_CONFLICT",
+      "expected_status": "INVALID",
+      "expected_codes": [
+        "STRUCTURAL_GEOMETRY_CONFLICT"
+      ],
+      "data": {
+        "architectural": {
+          "entity_id": "entity:column-grid-B4",
+          "offset_mm": 0.0,
+          "evidence_location": "evidence:A101:grid-B4"
+        },
+        "structural": {
+          "entity_id": "entity:column-grid-B4",
+          "offset_mm": 85.0,
+          "evidence_location": "evidence:S101:grid-B4"
+        },
+        "tolerance_mm": 10.0
+      }
+    },
+    {
+      "case_id": "COREV0-09",
+      "scenario_type": "DUPLICATE_REPRESENTATION_ONE_OBJECT",
+      "expected_status": "VALID",
+      "expected_codes": [],
+      "data": {
+        "representations": [
+          {
+            "representation_id": "rep:door-01-plan",
+            "technical_entity_id": "entity:door-01",
+            "role": "INSTALLED_INSTANCE",
+            "physical_identity_status": "UNIQUE_INSTANCE"
+          },
+          {
+            "representation_id": "rep:door-01-elevation",
+            "technical_entity_id": "entity:door-01",
+            "role": "INSTALLED_INSTANCE",
+            "physical_identity_status": "DUPLICATE_REPRESENTATION"
+          }
+        ],
+        "quantity": {
+          "duplicate_key": "TECHNICAL_ENTITY_ID",
+          "result_value": 1,
+          "unit": "count"
+        }
+      }
+    },
+    {
+      "case_id": "COREV0-10",
+      "scenario_type": "LEGEND_SYMBOL_EXCLUDED",
+      "expected_status": "VALID",
+      "expected_codes": [],
+      "data": {
+        "representations": [
+          {
+            "representation_id": "rep:fixture-01",
+            "technical_entity_id": "entity:fixture-01",
+            "role": "INSTALLED_INSTANCE",
+            "physical_identity_status": "UNIQUE_INSTANCE"
+          },
+          {
+            "representation_id": "rep:legend-fixture",
+            "technical_entity_id": "entity:legend-fixture",
+            "role": "LEGEND_SAMPLE",
+            "physical_identity_status": "NON_INSTANCE"
+          }
+        ],
+        "quantity": {
+          "result_value": 1,
+          "unit": "count"
+        }
+      }
+    },
+    {
+      "case_id": "COREV0-11",
+      "scenario_type": "SEMANTIC_LABEL_CLASS_MISMATCH",
+      "expected_status": "INVALID",
+      "expected_codes": [
+        "SEMANTIC_LABEL_CLASS_MISMATCH"
+      ],
+      "data": {
+        "label": {
+          "text": "WALL W-01",
+          "declared_class": "WALL",
+          "evidence_location": "evidence:A101:label-W01"
+        },
+        "linked_entity": {
+          "technical_entity_id": "entity:room-01",
+          "entity_class": "ROOM"
+        }
+      }
+    },
+    {
+      "case_id": "COREV0-12",
+      "scenario_type": "UNIT_SCALE_IMPLAUSIBLE_MAGNITUDE",
+      "expected_status": "INVALID",
+      "expected_codes": [
+        "IMPLAUSIBLE_MAGNITUDE"
+      ],
+      "data": {
+        "measurement": {
+          "technical_entity_id": "entity:room-02",
+          "kind": "AREA",
+          "original_value": 890000000.0,
+          "original_unit": "mm2",
+          "normalized_value": 890000.0,
+          "normalized_unit": "m2"
+        },
+        "profile_limit": {
+          "entity_class": "ROOM",
+          "measurement_kind": "AREA",
+          "max_value": 1000.0,
+          "unit": "m2"
+        }
+      }
+    },
+    {
+      "case_id": "COREV0-13",
+      "scenario_type": "STALE_MEASUREMENT_AFTER_REVISION_CHANGE",
+      "expected_status": "INVALID",
+      "expected_codes": [
+        "STALE_AFTER_REVISION_CHANGE"
+      ],
+      "data": {
+        "measurement": {
+          "measurement_record_id": "measurement:room-01-area",
+          "revision_set_id": "revset:old",
+          "revision_set_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "stale_state": "CURRENT"
+        },
+        "current_context": {
+          "revision_set_id": "revset:new",
+          "revision_set_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      }
+    },
+    {
+      "case_id": "COREV0-14",
+      "scenario_type": "INVALID_QUANTITY_MISSING_FORMULA_OR_UNIT",
+      "expected_status": "INVALID",
+      "expected_codes": [
+        "INVALID_QUANTITY_FORMULA_OR_UNIT"
+      ],
+      "data": {
+        "quantity": {
+          "quantity_record_id": "quantity:rooms-total",
+          "input_measurement_refs": [
+            "measurement:room-01-area"
+          ],
+          "calculation_plan": null,
+          "result_value": {
+            "value": 42.0
+          }
+        }
+      }
+    },
+    {
+      "case_id": "COREV0-15",
+      "scenario_type": "DERIVATIVE_AUTHORITY_PROMOTION",
+      "expected_status": "INVALID",
+      "expected_codes": [
+        "DERIVATIVE_AUTHORITY_PROMOTION"
+      ],
+      "data": {
+        "artifact": {
+          "artifact_id": "artifact:export:quantity-pdf",
+          "artifact_class": "DERIVATIVE",
+          "producer": "OUTPUT_ADAPTER"
+        },
+        "requested_authority_kinds": [
+          "GEOMETRY",
+          "MEASUREMENT_INPUT"
+        ]
+      }
+    },
+    {
+      "case_id": "COREV0-16",
+      "scenario_type": "TWO_MODULE_EXTENSIONS_ONE_IDENTITY",
+      "expected_status": "VALID",
+      "expected_codes": [],
+      "data": {
+        "technical_entity": {
+          "technical_entity_id": "entity:wall-01",
+          "entity_class": "WALL"
+        },
+        "module_extensions": [
+          {
+            "module_id": "module:architectural-measurement",
+            "technical_entity_id": "entity:wall-01",
+            "extension_id": "ext:wall-measurement"
+          },
+          {
+            "module_id": "module:structural-cross-check",
+            "technical_entity_id": "entity:wall-01",
+            "extension_id": "ext:wall-structural-check"
+          }
+        ]
+      }
+    }
+  ]
+}
