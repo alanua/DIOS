@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"privacy_class.schema.json","title":"Privacy Class","type":"string","enum":["PUBLIC","INTERNAL","PRIVATE","RESTRICTED"]}

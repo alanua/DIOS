@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"identifier.schema.json","title":"DIOS Identifier","description":"Opaque stable identifier used by DIOS records and external Skeleton references.","type":"string","minLength":1,"maxLength":256,"pattern":"^[A-Za-z0-9][A-Za-z0-9._:/-]*$"}
