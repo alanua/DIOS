@@ -64,6 +64,10 @@ python -m unittest discover -s tests -v
 - [Data Model](docs/DATA_MODEL.md)
 - [Validation](docs/VALIDATION.md)
 - [Roadmap](docs/ROADMAP.md)
+- [Threat model](docs/THREAT_MODEL.md)
+- [Security policy](SECURITY.md)
+- [Contributing](CONTRIBUTING.md)
+- [Maintainers](MAINTAINERS.md)
 
 Only public-safe code, schemas and synthetic fixtures belong in this repository. Real project files and outputs remain outside it.
 
