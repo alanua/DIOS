@@ -37,6 +37,21 @@ class QuantityRecordTests(unittest.TestCase):
         )
         self.assertIn("inferred data cannot be VERIFIED without an explicit review record", record.validate())
 
+    def test_invalid_source_page_and_confidence_fail_closed(self) -> None:
+        record = QuantityRecord(
+            item_id="ARCH-BAD-001",
+            description="Synthetic invalid record",
+            unit="m",
+            data_class=DataClass.CALCULATED,
+            verification_status=VerificationStatus.NEEDS_REVIEW,
+            confidence=1.5,
+            source=SourceRef(document_id=" ", page=0),
+        )
+        errors = record.validate()
+        self.assertIn("source.document_id is required", errors)
+        self.assertIn("source.page must be >= 1", errors)
+        self.assertIn("confidence must be between 0 and 1", errors)
+
     def test_conflict_requires_description(self) -> None:
         record = QuantityRecord(
             item_id="ARCH-OPENING-001",
