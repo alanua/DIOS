@@ -1,0 +1,264 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "skeleton.cad_bridge.schema.json",
+  "title": "Provider-neutral universal CAD bridge contract",
+  "oneOf": [
+    {"$ref": "#/$defs/CADBridgeEnvelope"},
+    {"$ref": "#/$defs/CADSessionGrant"},
+    {"$ref": "#/$defs/CADCapabilityProfile"},
+    {"$ref": "#/$defs/CADCommand"},
+    {"$ref": "#/$defs/CADCommandBatch"},
+    {"$ref": "#/$defs/CADWorkspaceSnapshot"},
+    {"$ref": "#/$defs/CADChangeSet"},
+    {"$ref": "#/$defs/CADValidationResult"},
+    {"$ref": "#/$defs/CADOperationResult"},
+    {"$ref": "#/$defs/CADTransactionReceipt"},
+    {"$ref": "#/$defs/CADFailure"}
+  ],
+  "$defs": {
+    "Status": {
+      "enum": ["ok", "failed", "passed", "success", "partial_failure"]
+    },
+    "JSONObject": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "CADBridgeEnvelope": {
+      "type": "object",
+      "required": ["session_grant", "batch"],
+      "additionalProperties": false,
+      "properties": {
+        "session_grant": {"$ref": "#/$defs/CADSessionGrant"},
+        "batch": {"$ref": "#/$defs/CADCommandBatch"}
+      }
+    },
+    "CADFailure": {
+      "type": "object",
+      "required": ["code", "message", "retryable"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "message": {"type": "string", "minLength": 1},
+        "command_id": {"type": ["string", "null"]},
+        "operation": {"type": ["string", "null"]},
+        "retryable": {"type": "boolean"}
+      }
+    },
+    "CADSessionGrant": {
+      "type": "object",
+      "required": ["session_id", "workspace_id", "workspace_root", "scope", "capabilities"],
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {"type": "string", "minLength": 1},
+        "workspace_id": {"type": "string", "minLength": 1},
+        "workspace_root": {"type": "string", "minLength": 1},
+        "scope": {"const": "FULL_CAD_WORKSPACE"},
+        "capabilities": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "expires_at": {"type": ["string", "null"]}
+      }
+    },
+    "CADCapabilityProfile": {
+      "type": "object",
+      "required": [
+        "provider_id",
+        "provider_kind",
+        "bridge_revision",
+        "capabilities",
+        "operations",
+        "max_batch_operations",
+        "supports_transactions",
+        "supports_partial_failure",
+        "live_runtime_execution"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "provider_id": {"type": "string", "minLength": 1},
+        "provider_kind": {"type": "string", "minLength": 1},
+        "bridge_revision": {"type": "string", "minLength": 1},
+        "capabilities": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "operations": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/CADOperation"},
+          "uniqueItems": true
+        },
+        "max_batch_operations": {"type": "integer", "minimum": 1},
+        "supports_transactions": {"type": "boolean"},
+        "supports_partial_failure": {"type": "boolean"},
+        "live_runtime_execution": {"type": "boolean"}
+      }
+    },
+    "CADOperation": {
+      "enum": ["create", "modify", "delete", "rebuild", "save", "checkpoint", "rollback"]
+    },
+    "CADCommand": {
+      "type": "object",
+      "required": ["command_id", "operation", "payload"],
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {"type": "string", "minLength": 1},
+        "operation": {"$ref": "#/$defs/CADOperation"},
+        "target_ref": {"type": ["string", "null"]},
+        "payload": {"$ref": "#/$defs/JSONObject"},
+        "required_capability": {"type": ["string", "null"]},
+        "idempotency_key": {"type": ["string", "null"]}
+      }
+    },
+    "CADCommandBatch": {
+      "type": "object",
+      "required": ["batch_id", "commands", "continue_on_error"],
+      "additionalProperties": false,
+      "properties": {
+        "batch_id": {"type": "string", "minLength": 1},
+        "continue_on_error": {"type": "boolean"},
+        "commands": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/CADCommand"}
+        }
+      }
+    },
+    "CADEntity": {
+      "type": "object",
+      "required": ["entity_ref", "type", "geometry", "properties", "version"],
+      "additionalProperties": true,
+      "properties": {
+        "entity_ref": {"type": "string", "minLength": 1},
+        "type": {"type": "string", "minLength": 1},
+        "geometry": {},
+        "properties": {"type": "object"},
+        "version": {"type": "integer", "minimum": 1}
+      }
+    },
+    "CADWorkspaceSnapshot": {
+      "type": "object",
+      "required": [
+        "snapshot_id",
+        "workspace_id",
+        "revision",
+        "saved_revision",
+        "rebuild_count",
+        "entities",
+        "saved_artifacts"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "snapshot_id": {"type": "string", "pattern": "^cadss_[0-9a-f]{32}$"},
+        "workspace_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "integer", "minimum": 0},
+        "saved_revision": {"type": "integer", "minimum": 0},
+        "rebuild_count": {"type": "integer", "minimum": 0},
+        "entities": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/CADEntity"}
+        },
+        "saved_artifacts": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        }
+      }
+    },
+    "CADChangeSet": {
+      "type": "object",
+      "required": ["before_snapshot_id", "after_snapshot_id", "created_refs", "modified_refs", "deleted_refs", "metadata"],
+      "additionalProperties": false,
+      "properties": {
+        "before_snapshot_id": {"type": "string", "minLength": 1},
+        "after_snapshot_id": {"type": "string", "minLength": 1},
+        "created_refs": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "modified_refs": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "deleted_refs": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "metadata": {"$ref": "#/$defs/JSONObject"}
+      }
+    },
+    "CADValidationResult": {
+      "type": "object",
+      "required": ["status", "failures", "warnings"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {"enum": ["passed", "failed"]},
+        "failures": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/CADFailure"}
+        },
+        "warnings": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "CADOperationResult": {
+      "type": "object",
+      "required": [
+        "command_id",
+        "operation",
+        "status",
+        "before_snapshot",
+        "after_snapshot",
+        "change_set",
+        "output"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {"type": "string", "minLength": 1},
+        "operation": {"$ref": "#/$defs/CADOperation"},
+        "status": {"enum": ["ok", "failed"]},
+        "before_snapshot": {"$ref": "#/$defs/CADWorkspaceSnapshot"},
+        "after_snapshot": {"$ref": "#/$defs/CADWorkspaceSnapshot"},
+        "change_set": {"$ref": "#/$defs/CADChangeSet"},
+        "entity_ref": {"type": ["string", "null"]},
+        "output": {"$ref": "#/$defs/JSONObject"},
+        "failure": {
+          "anyOf": [
+            {"$ref": "#/$defs/CADFailure"},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "CADTransactionReceipt": {
+      "type": "object",
+      "required": [
+        "batch_id",
+        "status",
+        "before_snapshot",
+        "after_snapshot",
+        "change_set",
+        "validation",
+        "operation_results"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "batch_id": {"type": "string", "minLength": 1},
+        "status": {"enum": ["success", "partial_failure", "failed"]},
+        "before_snapshot": {"$ref": "#/$defs/CADWorkspaceSnapshot"},
+        "after_snapshot": {"$ref": "#/$defs/CADWorkspaceSnapshot"},
+        "change_set": {"$ref": "#/$defs/CADChangeSet"},
+        "validation": {"$ref": "#/$defs/CADValidationResult"},
+        "operation_results": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/CADOperationResult"}
+        }
+      }
+    }
+  }
+}
