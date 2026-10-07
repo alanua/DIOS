@@ -29,11 +29,23 @@ class CadBridgeError(ValueError):
 
 
 def _canonical_json(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
 
 
 def deterministic_digest(value: Any) -> str:
     return hashlib.sha256(_canonical_json(value).encode("utf-8")).hexdigest()
+
+
+def _require_json_compatible(value: Any, label: str) -> None:
+    try:
+        _canonical_json(value)
+    except (TypeError, ValueError) as exc:
+        raise CadBridgeError(f"{label} must be JSON-serializable") from exc
+
+
+def _require_non_blank_string(value: Any, label: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise CadBridgeError(f"{label} is required")
 
 
 def _sorted_entities(entities: dict[str, JsonObject]) -> dict[str, JsonObject]:
@@ -49,19 +61,15 @@ class CadMutationAuthority:
     approval_reference: str
 
     def __post_init__(self) -> None:
-        if not self.session_id.strip():
-            raise CadBridgeError("authority.session_id is required")
-        if not self.workspace_id.strip():
-            raise CadBridgeError("authority.workspace_id is required")
+        _require_non_blank_string(self.session_id, "authority.session_id")
+        _require_non_blank_string(self.workspace_id, "authority.workspace_id")
         scopes = frozenset(self.scopes)
         if not scopes:
             raise CadBridgeError("authority.scopes requires at least one scope")
-        if any(not scope.strip() for scope in scopes):
+        if any(not isinstance(scope, str) or not scope.strip() for scope in scopes):
             raise CadBridgeError("authority.scopes cannot contain blank scopes")
-        if not self.approved_by.strip():
-            raise CadBridgeError("authority.approved_by is required")
-        if not self.approval_reference.strip():
-            raise CadBridgeError("authority.approval_reference is required")
+        _require_non_blank_string(self.approved_by, "authority.approved_by")
+        _require_non_blank_string(self.approval_reference, "authority.approval_reference")
         object.__setattr__(self, "scopes", scopes)
 
     @classmethod
@@ -99,6 +107,24 @@ class CadWorkspaceSnapshot:
     revision: int
     entities: dict[str, JsonObject]
 
+    def __post_init__(self) -> None:
+        _require_non_blank_string(self.workspace_id, "snapshot.workspace_id")
+        _require_non_blank_string(self.provider, "snapshot.provider")
+        if not isinstance(self.revision, int):
+            raise CadBridgeError("snapshot.revision must be an int")
+        if self.revision < 0:
+            raise CadBridgeError("snapshot.revision must be >= 0")
+        if not isinstance(self.entities, dict):
+            raise CadBridgeError("snapshot.entities must be a dict")
+        for entity_id, entity in self.entities.items():
+            if not isinstance(entity_id, str) or not entity_id.strip():
+                raise CadBridgeError("snapshot.entities requires non-blank string ids")
+            if not isinstance(entity, dict):
+                raise CadBridgeError("snapshot.entities values must be dicts")
+        copied_entities = _sorted_entities(self.entities)
+        _require_json_compatible(copied_entities, "snapshot.entities")
+        object.__setattr__(self, "entities", copied_entities)
+
     def to_dict(self) -> JsonObject:
         return {
             "entities": _sorted_entities(self.entities),
@@ -121,15 +147,19 @@ class CadCommand:
     payload: JsonObject = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "command_type", CadCommandType(self.command_type))
-        if not self.command_id.strip():
-            raise CadBridgeError("command.command_id is required")
-        if not self.target_id.strip():
-            raise CadBridgeError("command.target_id is required")
-        if not self.scope.strip():
-            raise CadBridgeError("command.scope is required")
+        try:
+            command_type = CadCommandType(self.command_type)
+        except ValueError as exc:
+            raise CadBridgeError(f"unsupported command type: {self.command_type}") from exc
+        object.__setattr__(self, "command_type", command_type)
+        _require_non_blank_string(self.command_id, "command.command_id")
+        _require_non_blank_string(self.target_id, "command.target_id")
+        _require_non_blank_string(self.scope, "command.scope")
         if not isinstance(self.payload, dict):
             raise CadBridgeError("command.payload must be a dict")
+        payload = deepcopy(self.payload)
+        _require_json_compatible(payload, "command.payload")
+        object.__setattr__(self, "payload", payload)
 
     def to_dict(self) -> JsonObject:
         return {
@@ -153,6 +183,13 @@ class CadCommandResult:
     before_digest: str
     after_digest: str
     receipt: str
+
+    def __post_init__(self) -> None:
+        try:
+            status = CadCommandStatus(self.status)
+        except ValueError as exc:
+            raise CadBridgeError(f"unsupported command status: {self.status}") from exc
+        object.__setattr__(self, "status", status)
 
     @property
     def success(self) -> bool:
@@ -180,11 +217,13 @@ class CadCommandBatch:
     rollback_on_failure: bool = True
 
     def __post_init__(self) -> None:
-        if not self.batch_id.strip():
-            raise CadBridgeError("batch.batch_id is required")
+        _require_non_blank_string(self.batch_id, "batch.batch_id")
         object.__setattr__(self, "commands", tuple(self.commands))
         if not self.commands:
             raise CadBridgeError("batch.commands requires at least one command")
+        command_ids = [command.command_id for command in self.commands]
+        if len(command_ids) != len(set(command_ids)):
+            raise CadBridgeError("batch.commands cannot contain duplicate command_id values")
 
     @classmethod
     def from_commands(
@@ -213,6 +252,9 @@ class CadBatchResult:
     after_digest: str
     results: tuple[CadCommandResult, ...]
     receipt: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "results", tuple(self.results))
 
     def to_dict(self) -> JsonObject:
         return {
@@ -246,8 +288,7 @@ class SyntheticMutableCadAdapter:
     provider = "synthetic"
 
     def __init__(self, workspace_id: str, entities: dict[str, JsonObject] | None = None) -> None:
-        if not workspace_id.strip():
-            raise CadBridgeError("workspace_id is required")
+        _require_non_blank_string(workspace_id, "workspace_id")
         self.workspace_id = workspace_id
         self._entities: dict[str, JsonObject] = deepcopy(entities) if entities else {}
         self._revision = 0
@@ -263,6 +304,8 @@ class SyntheticMutableCadAdapter:
     def restore(self, snapshot: CadWorkspaceSnapshot) -> None:
         if snapshot.workspace_id != self.workspace_id:
             raise CadBridgeError("cannot restore snapshot from a different workspace")
+        if snapshot.provider != self.provider:
+            raise CadBridgeError("cannot restore snapshot from a different provider")
         self._entities = _sorted_entities(snapshot.entities)
         self._revision = snapshot.revision
 
@@ -345,8 +388,7 @@ class CadBridgeSession:
     adapter: CadAdapter
 
     def __post_init__(self) -> None:
-        if not self.session_id.strip():
-            raise CadBridgeError("session.session_id is required")
+        _require_non_blank_string(self.session_id, "session.session_id")
 
     @property
     def workspace_id(self) -> str:
@@ -366,7 +408,12 @@ class CadBridgeSession:
                 before = self.adapter.snapshot()
                 result = self._unauthorized_result(command, before, authority)
             else:
-                result = self.adapter.apply_command(command)
+                before = self.adapter.snapshot()
+                try:
+                    result = self.adapter.apply_command(command)
+                except CadBridgeError as exc:
+                    after = self.adapter.snapshot()
+                    result = self._failed_result(command, before, after, str(exc))
             results.append(result)
             if not result.success:
                 failed = True
@@ -430,6 +477,33 @@ class CadBridgeSession:
             message=message,
             before_digest=snapshot.digest,
             after_digest=snapshot.digest,
+            receipt=receipt,
+        )
+
+    def _failed_result(
+        self,
+        command: CadCommand,
+        before: CadWorkspaceSnapshot,
+        after: CadWorkspaceSnapshot,
+        message: str,
+    ) -> CadCommandResult:
+        receipt = deterministic_digest(
+            {
+                "after_digest": after.digest,
+                "before_digest": before.digest,
+                "command": command.to_dict(),
+                "message": message,
+                "provider": self.adapter.provider,
+                "status": CadCommandStatus.FAILED.value,
+                "workspace_id": self.workspace_id,
+            }
+        )
+        return CadCommandResult(
+            command_id=command.command_id,
+            status=CadCommandStatus.FAILED,
+            message=message,
+            before_digest=before.digest,
+            after_digest=after.digest,
             receipt=receipt,
         )
 
