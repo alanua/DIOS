@@ -8,6 +8,7 @@ from dios import (
     CadCommandStatus,
     CadCommandType,
     CadMutationAuthority,
+    CadWorkspaceSnapshot,
     SyntheticMutableCadAdapter,
 )
 
@@ -158,6 +159,107 @@ class CadBridgeTests(unittest.TestCase):
         self.assertFalse(result.success)
         self.assertEqual(result.results[0].status, CadCommandStatus.UNAUTHORIZED)
         self.assertIsNone(adapter.entity("wall-1"))
+
+    def test_command_payload_is_copied_and_json_safe(self) -> None:
+        payload = {"type": "room", "metadata": {"level": 1}}
+        command = CadCommand(
+            command_id="cmd-1",
+            command_type=CadCommandType.CREATE_ENTITY,
+            target_id="room-1",
+            scope="model",
+            payload=payload,
+        )
+
+        payload["metadata"]["level"] = 2
+
+        self.assertEqual(command.payload, {"type": "room", "metadata": {"level": 1}})
+        with self.assertRaisesRegex(CadBridgeError, "JSON-serializable"):
+            CadCommand(
+                command_id="cmd-2",
+                command_type=CadCommandType.CREATE_ENTITY,
+                target_id="room-2",
+                scope="model",
+                payload={"bad": object()},
+            )
+
+    def test_bad_command_type_raises_bridge_error(self) -> None:
+        with self.assertRaisesRegex(CadBridgeError, "unsupported command type"):
+            CadCommand(
+                command_id="cmd-1",
+                command_type="MOVE_ENTITY",  # type: ignore[arg-type]
+                target_id="room-1",
+                scope="model",
+            )
+
+    def test_batch_rejects_duplicate_command_ids(self) -> None:
+        commands = [
+            CadCommand(
+                command_id="cmd-1",
+                command_type=CadCommandType.CREATE_ENTITY,
+                target_id="room-1",
+                scope="model",
+                payload={"type": "room"},
+            ),
+            CadCommand(
+                command_id="cmd-1",
+                command_type=CadCommandType.DELETE_ENTITY,
+                target_id="room-1",
+                scope="model",
+            ),
+        ]
+
+        with self.assertRaisesRegex(CadBridgeError, "duplicate command_id"):
+            CadCommandBatch.from_commands("batch-1", commands)
+
+    def test_snapshot_copies_entities_and_restore_requires_provider_match(self) -> None:
+        entities = {"room-1": {"type": "room", "area": 12}}
+        snapshot = CadWorkspaceSnapshot(
+            workspace_id="workspace-1",
+            provider="synthetic",
+            revision=1,
+            entities=entities,
+        )
+        entities["room-1"]["area"] = 20
+
+        self.assertEqual(snapshot.entities["room-1"]["area"], 12)
+
+        adapter = SyntheticMutableCadAdapter("workspace-1")
+        with self.assertRaisesRegex(CadBridgeError, "different provider"):
+            adapter.restore(
+                CadWorkspaceSnapshot(
+                    workspace_id="workspace-1",
+                    provider="other-provider",
+                    revision=1,
+                    entities={"room-1": {"type": "room"}},
+                )
+            )
+
+    def test_adapter_bridge_error_is_reported_as_failed_result(self) -> None:
+        class RaisingAdapter(SyntheticMutableCadAdapter):
+            def apply_command(self, command: CadCommand):  # type: ignore[no-untyped-def]
+                raise CadBridgeError("provider rejected command")
+
+        adapter = RaisingAdapter("workspace-1")
+        session = CadBridgeSession("session-1", adapter)
+        batch = CadCommandBatch.from_commands(
+            "batch-1",
+            [
+                CadCommand(
+                    command_id="cmd-1",
+                    command_type=CadCommandType.CREATE_ENTITY,
+                    target_id="room-1",
+                    scope="model",
+                    payload={"type": "room"},
+                )
+            ],
+        )
+
+        result = session.execute(batch, self.authority())
+
+        self.assertFalse(result.success)
+        self.assertTrue(result.rolled_back)
+        self.assertEqual(result.results[0].status, CadCommandStatus.FAILED)
+        self.assertEqual(result.results[0].message, "provider rejected command")
 
 
 if __name__ == "__main__":
