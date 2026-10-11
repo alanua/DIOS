@@ -2,7 +2,29 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+import re
 from typing import Any
+
+
+_LOCAL_SOURCE_REDACTION = "[redacted-local-source]"
+_EVIDENCE_REFERENCE_REDACTION = "[redacted-evidence-reference]"
+
+_LOCAL_PATH_DOCUMENT_SUFFIXES = {
+    ".csv",
+    ".doc",
+    ".docx",
+    ".dwg",
+    ".dxf",
+    ".ifc",
+    ".pdf",
+    ".rvt",
+    ".txt",
+    ".xls",
+    ".xlsx",
+    ".zip",
+}
+
+_WINDOWS_ABSOLUTE_PATH = re.compile(r"^[A-Za-z]:[\\/]")
 
 
 class DataClass(StrEnum):
@@ -34,6 +56,44 @@ class SourceRef:
         if self.page is not None and self.page < 1:
             errors.append("source.page must be >= 1")
         return errors
+
+
+def _looks_like_local_path(value: str) -> bool:
+    candidate = value.strip()
+    lower_candidate = candidate.lower()
+
+    if not candidate:
+        return False
+    if lower_candidate.startswith("file:"):
+        return True
+    if candidate.startswith(("/", "~/", "./", "../")):
+        return True
+    if "\\" in candidate:
+        return True
+    if _WINDOWS_ABSOLUTE_PATH.match(candidate):
+        return True
+
+    path_part = re.split(r"[?#]", candidate, maxsplit=1)[0].lower()
+    return "/" in path_part and any(path_part.endswith(suffix) for suffix in _LOCAL_PATH_DOCUMENT_SUFFIXES)
+
+
+def _looks_like_document_content(value: str) -> bool:
+    candidate = value.strip()
+    return "\n" in candidate or "\r" in candidate
+
+
+def _public_safe_document_id(document_id: str) -> str:
+    if _looks_like_local_path(document_id) or _looks_like_document_content(document_id):
+        return _LOCAL_SOURCE_REDACTION
+    return document_id
+
+
+def _public_safe_evidence_reference(evidence_reference: str | None) -> str | None:
+    if evidence_reference is None:
+        return None
+    if _looks_like_local_path(evidence_reference) or _looks_like_document_content(evidence_reference):
+        return _EVIDENCE_REFERENCE_REDACTION
+    return evidence_reference
 
 
 @dataclass
@@ -90,11 +150,11 @@ class QuantityRecord:
             "confidence": self.confidence,
             "verification_status": self.verification_status.value,
             "source": {
-                "document_id": self.source.document_id,
+                "document_id": _public_safe_document_id(self.source.document_id),
                 "revision": self.source.revision,
                 "sheet": self.source.sheet,
                 "page": self.source.page,
-                "evidence_reference": self.source.evidence_reference,
+                "evidence_reference": _public_safe_evidence_reference(self.source.evidence_reference),
             },
             "assumptions": self.assumptions,
             "conflicts": self.conflicts,

@@ -87,6 +87,90 @@ class QuantityRecordPublicBoundaryTests(unittest.TestCase):
         self.assertNotIn("/", payload["source"]["document_id"])
         self.assertNotIn("\\", payload["source"]["document_id"])
 
+    def test_public_serialization_redacts_local_source_paths_without_changing_review_status(self) -> None:
+        record = QuantityRecord(
+            item_id="SYN-ROOM-AREA-002",
+            description="Synthetic reviewed area with accidental local source path",
+            unit="m2",
+            source_value=12.5,
+            normalized_si_value=12.5,
+            normalized_si_unit="m2",
+            measurement_method="SYNTHETIC_POLYGON_AREA",
+            data_class=DataClass.CALCULATED,
+            verification_status=VerificationStatus.NEEDS_REVIEW,
+            source=SourceRef(
+                document_id="/home/example/private/customer-a/aufmass-sample.pdf",
+                revision="S2",
+                sheet="SYN-301",
+                page=3,
+                evidence_reference="C:\\Users\\example\\private\\customer-a\\aufmass-sample.pdf#page=3",
+            ),
+            assumptions=["Synthetic path fixture; no real customer source was used."],
+        )
+
+        payload = record.to_dict()
+
+        self.assertEqual(record.validate(), [])
+        self.assertEqual(payload["verification_status"], "NEEDS_REVIEW")
+        self.assertEqual(payload["source"]["document_id"], "[redacted-local-source]")
+        self.assertEqual(payload["source"]["evidence_reference"], "[redacted-evidence-reference]")
+        self.assertNotIn("aufmass-sample.pdf", str(payload))
+        self.assertNotIn("/home/example", str(payload))
+        self.assertNotIn("C:\\Users", str(payload))
+
+    def test_public_serialization_preserves_legitimate_source_ids_and_conflict_evidence_refs(self) -> None:
+        record = QuantityRecord(
+            item_id="SYN-PIPE-LENGTH-001",
+            description="Synthetic pipe length with public conflict reference",
+            unit="m",
+            source_value=8.25,
+            normalized_si_value=8.25,
+            normalized_si_unit="m",
+            measurement_method="SYNTHETIC_CENTERLINE_TRACE",
+            data_class=DataClass.EXPLICIT,
+            verification_status=VerificationStatus.CONFLICT,
+            source=SourceRef(
+                document_id="urn:synthetic:source:public:pipe-run-a",
+                revision="S3",
+                sheet="SYN-401",
+                page=4,
+                evidence_reference="synthetic-cell:SYN-401:B12",
+            ),
+            conflicts=["Synthetic schedule length differs from centerline trace."],
+        )
+
+        payload = record.to_dict()
+
+        self.assertEqual(record.validate(), [])
+        self.assertEqual(payload["verification_status"], "CONFLICT")
+        self.assertEqual(payload["source"]["document_id"], "urn:synthetic:source:public:pipe-run-a")
+        self.assertEqual(payload["source"]["evidence_reference"], "synthetic-cell:SYN-401:B12")
+        self.assertEqual(payload["conflicts"], ["Synthetic schedule length differs from centerline trace."])
+
+    def test_public_serialization_redacts_pasted_evidence_content(self) -> None:
+        record = QuantityRecord(
+            item_id="SYN-DOOR-COUNT-002",
+            description="Synthetic door count with pasted evidence content fixture",
+            unit="pcs",
+            source_value=6,
+            normalized_si_value=6,
+            normalized_si_unit="pcs",
+            data_class=DataClass.EXPLICIT,
+            verification_status=VerificationStatus.VERIFIED,
+            source=SourceRef(
+                document_id="synthetic-public-door-schedule",
+                evidence_reference="Door schedule excerpt\nD-01 synthetic row\nD-02 synthetic row",
+            ),
+        )
+
+        payload = record.to_dict()
+
+        self.assertEqual(record.validate(), [])
+        self.assertEqual(payload["verification_status"], "VERIFIED")
+        self.assertEqual(payload["source"]["document_id"], "synthetic-public-door-schedule")
+        self.assertEqual(payload["source"]["evidence_reference"], "[redacted-evidence-reference]")
+        self.assertNotIn("Door schedule excerpt", str(payload))
+
 
 if __name__ == "__main__":
     unittest.main()
