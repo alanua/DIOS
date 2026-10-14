@@ -1,6 +1,16 @@
 """DIOS core data models and provider-neutral bridge primitives."""
 
 from .cad_bridge import (
+    CADCapabilityProfile,
+    CADSessionGrant,
+    CADCommand,
+    CADCommandBatch,
+    CADOperationResult,
+    CADWorkspaceSnapshot,
+    CADChangeSet,
+    CADValidationResult,
+    CADTransactionReceipt,
+    CADFailure,
     CadAdapter,
     CadBatchResult,
     CadBridgeError,
@@ -19,6 +29,9 @@ from .cad_bridge import (
 from .models import DataClass, QuantityRecord, SourceRef, VerificationStatus
 
 __all__ = [
+    "CADCapabilityProfile", "CADSessionGrant", "CADCommand", "CADCommandBatch",
+    "CADOperationResult", "CADWorkspaceSnapshot", "CADChangeSet",
+    "CADValidationResult", "CADTransactionReceipt", "CADFailure",
     "CadBatchResult",
     "CadAdapter",
     "CadBridgeError",
