@@ -162,3 +162,72 @@ class CadBridgeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class CADV02ContractTests(unittest.TestCase):
+    def setUp(self):
+        from dios import CADSessionGrant, CADCapabilityProfile
+        self.adapter = SyntheticMutableCadAdapter("one")
+        self.session = CadBridgeSession("s", self.adapter)
+        self.grant = CADSessionGrant("s", "one", CADCapabilityProfile.FULL_CAD_WORKSPACE,
+                                    4102444800, approval_reference="operator:synthetic")
+
+    def run_cmd(self, kind, target="item", payload=None, *, grant=None):
+        cmd = CadCommand("cmd", kind, target, "model", payload or {})
+        return self.session.execute(CadCommandBatch.from_commands("batch", [cmd]), grant or self.grant)
+
+    def test_operations_mutation_and_read_only(self):
+        from dios import CADCapabilityProfile, CADSessionGrant
+        self.assertTrue(self.run_cmd("CREATE", payload={"type": "wall"}).success)
+        before = self.adapter.snapshot().digest
+        for kind in ("INSPECT", "SNAPSHOT", "COMPARE", "VALIDATE"):
+            payload = {"snapshot": self.adapter.snapshot().to_dict()} if kind == "COMPARE" else {}
+            ro = CADSessionGrant("s", "one", CADCapabilityProfile.READ_ONLY, 4102444800)
+            self.assertTrue(self.run_cmd(kind, payload=payload, grant=ro).success)
+            self.assertEqual(self.adapter.snapshot().digest, before)
+        self.assertTrue(self.run_cmd("MODIFY", payload={"height": 2}).success)
+        self.assertTrue(self.run_cmd("SAVE").success)
+        self.assertTrue(self.run_cmd("REBUILD").success)
+        self.assertTrue(self.run_cmd("DELETE").success)
+        self.assertIsNone(self.adapter.entity("item"))
+
+    def test_checkpoint_rollback_and_fail_closed_grant(self):
+        from dios import CADCapabilityProfile, CADSessionGrant, CadBridgeError
+        self.session.checkpoint("base", self.grant)
+        self.assertTrue(self.run_cmd("CREATE", payload={"type": "line"}).success)
+        self.assertTrue(self.run_cmd("ROLLBACK", payload={"checkpoint_id": "base"}).success)
+        self.assertIsNone(self.adapter.entity("item"))
+        self.assertFalse(self.run_cmd("ROLLBACK", payload={"checkpoint_id": "missing"}).success)
+        expired = CADSessionGrant("s", "one", CADCapabilityProfile.FULL_CAD_WORKSPACE,
+                                  1, approval_reference="operator:synthetic")
+        with self.assertRaisesRegex(CadBridgeError, "expired"):
+            self.run_cmd("CREATE", payload={"type": "line"}, grant=expired)
+        revoked = CADSessionGrant("s", "one", CADCapabilityProfile.FULL_CAD_WORKSPACE,
+                                  4102444800, approval_reference="operator:synthetic", revoked=True)
+        with self.assertRaisesRegex(CadBridgeError, "revoked"):
+            self.run_cmd("CREATE", payload={"type": "line"}, grant=revoked)
+        wrong = CADSessionGrant("s", "two", CADCapabilityProfile.FULL_CAD_WORKSPACE,
+                                4102444800, approval_reference="operator:synthetic")
+        with self.assertRaisesRegex(CadBridgeError, "workspace"):
+            self.run_cmd("CREATE", payload={"type": "line"}, grant=wrong)
+        read = CADSessionGrant("s", "one", CADCapabilityProfile.READ_ONLY, 4102444800)
+        self.assertFalse(self.run_cmd("CREATE", payload={"type": "line"}, grant=read).success)
+        self.assertIsNone(self.adapter.entity("item"))
+
+    def test_public_typing_and_duplicate_batch_fail_closed(self):
+        from dios import CADCommand, CADCommandBatch, CADChangeSet, CADFailure
+        self.assertIs(CADCommand, CadCommand)
+        self.assertEqual(CADFailure("denied", "no").to_dict()["code"], "denied")
+        self.assertEqual(CADChangeSet("a", "b", ("x",)).to_dict()["changed_entity_ids"], ["x"])
+        c = CADCommand("same", "INSPECT", "item", "model")
+        with self.assertRaisesRegex(CadBridgeError, "duplicate"):
+            CADCommandBatch.from_commands("b", [c, c])
+        with self.assertRaises(CadBridgeError):
+            CADCommand("bad", "RUN_SHELL", "item", "model")
+
+    def test_invalid_nonnumeric_or_infinite_grant_expiry(self):
+        from dios import CADCapabilityProfile, CADSessionGrant, CadBridgeError
+        for expires in (float("inf"), float("nan"), -1, True):
+            with self.subTest(expires=expires):
+                with self.assertRaises(CadBridgeError):
+                    CADSessionGrant("s", "one", CADCapabilityProfile.FULL_CAD_WORKSPACE,
+                                    expires, approval_reference="operator:synthetic")
