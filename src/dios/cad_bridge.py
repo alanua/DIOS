@@ -399,6 +399,12 @@ class SyntheticMutableCadAdapter:
         self._entities = _sorted_entities(snapshot.entities)
         self._revision = snapshot.revision
 
+    def restore_checkpoint(self, snapshot: CadWorkspaceSnapshot) -> None:
+        """Explicit rollback is a new committed revision, not time travel."""
+        prior_revision = self._revision
+        self.restore(snapshot)
+        self._revision = prior_revision + 1
+
     def entity(self, entity_id: str) -> JsonObject | None:
         entity = self._entities.get(entity_id)
         return deepcopy(entity) if entity is not None else None
@@ -539,7 +545,10 @@ class CadBridgeSession:
             status, message = CadCommandStatus.FAILED, "checkpoint not found"
         else:
             try:
-                self.adapter.restore(snap)
+                restore_checkpoint = getattr(self.adapter, "restore_checkpoint", None)
+                if not callable(restore_checkpoint):
+                    raise CadBridgeError("adapter checkpoint restore unsupported")
+                restore_checkpoint(snap)
                 status, message = CadCommandStatus.APPLIED, "checkpoint restored"
             except CadBridgeError:
                 status, message = CadCommandStatus.FAILED, "checkpoint invalid"
