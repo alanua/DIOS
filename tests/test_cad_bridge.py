@@ -231,3 +231,29 @@ class CADV02ContractTests(unittest.TestCase):
                 with self.assertRaises(CadBridgeError):
                     CADSessionGrant("s", "one", CADCapabilityProfile.FULL_CAD_WORKSPACE,
                                     expires, approval_reference="operator:synthetic")
+
+
+def test_explicit_checkpoint_rollback_advances_revision_monotonically():
+    """A former revision must never regain authority after explicit rollback."""
+    from dios import (
+        CADCapabilityProfile, CADSessionGrant, CadBridgeSession,
+        CadCommand, CadCommandBatch, SyntheticMutableCadAdapter,
+    )
+    adapter = SyntheticMutableCadAdapter("workspace-1")
+    session = CadBridgeSession("session-1", adapter)
+    grant = CADSessionGrant(
+        session_id="session-1", workspace_id="workspace-1",
+        capability_profile=CADCapabilityProfile.FULL_CAD_WORKSPACE,
+        expires_at=4102444800, approval_reference="synthetic-approval",
+    )
+    saved = session.checkpoint("baseline", grant)
+    create = CadCommand("a", "CREATE", "shape-1", "model", {"type":"line"})
+    assert session.execute(CadCommandBatch.from_commands("create", [create]), grant).success
+    prior = adapter.snapshot()
+    rollback = CadCommand("b", "ROLLBACK", "workspace-1", "model", {"checkpoint_id":"baseline"})
+    result = session.execute(CadCommandBatch.from_commands("rollback", [rollback]), grant)
+    final = adapter.snapshot()
+    assert result.success
+    assert final.entities == saved.entities
+    assert final.revision > prior.revision > saved.revision
+    assert final.digest != saved.digest
