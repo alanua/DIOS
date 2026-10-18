@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"validation_severity.schema.json","title":"Technical Validation Severity","type":"string","enum":["INFO","WARNING","ERROR","BLOCKER"]}

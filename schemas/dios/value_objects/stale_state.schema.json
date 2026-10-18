@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"stale_state.schema.json","title":"Technical Stale State","type":"string","enum":["CURRENT","STALE","REVALIDATION_REQUIRED","BLOCKED","VOID"]}

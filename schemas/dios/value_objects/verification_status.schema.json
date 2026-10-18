@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"verification_status.schema.json","title":"Verification Status","type":"string","enum":["VERIFIED","NEEDS_REVIEW","CONFLICT","NOT_FOUND"]}

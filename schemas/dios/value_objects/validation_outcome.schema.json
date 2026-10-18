@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"validation_outcome.schema.json","title":"Technical Validation Outcome","type":"string","enum":["PASS","PASS_WITH_WARNINGS","FAIL","BLOCKED"]}

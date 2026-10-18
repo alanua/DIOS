@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"measurement_kind.schema.json","title":"Measurement Kind","description":"Canonical DIOS measurement families for the initial architecture.","type":"string","enum":["LENGTH","AREA","VOLUME","COUNT","WEIGHT"]}
